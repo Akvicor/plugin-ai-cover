@@ -15,6 +15,13 @@ node_modules/
 coverage/
 *.timestamp-*-*.mjs
 
+### OpenAPI Generator 辅助文件
+/ui/src/api/generated/.gitignore
+/ui/src/api/generated/.npmignore
+/ui/src/api/generated/.openapi-generator-ignore
+/ui/src/api/generated/.openapi-generator/
+/ui/src/api/generated/git_push.sh
+
 ### IDE
 .apt_generated
 .classpath
