@@ -1,0 +1,25 @@
+apiVersion: plugin.halo.run/v1alpha1
+kind: Plugin
+metadata:
+  name: ai-cover
+  annotations:
+    "store.halo.run/recommended-apps": '["app-acslk9nu"]'
+spec:
+  enabled: true
+  requires: ">=2.26.0"
+  author:
+    name: akvicor
+    website: https://github.com/akvicor
+  logo: logo.png
+  configMapName: plugin-ai-cover-configmap
+  settingName: plugin-ai-cover-settings
+  homepage: https://github.com/akvicor/plugin-ai-cover#readme
+  repo: https://github.com/akvicor/plugin-ai-cover
+  issues: https://github.com/akvicor/plugin-ai-cover/issues
+  displayName: "AI 封面生成"
+  description: "使用 AI Foundation 配置的图片生成模型，根据文章标题、提示词与正文生成封面图，并上传到附件库"
+  pluginDependencies:
+    ai-foundation: ">=1.0.0 & <2.0.0"
+  license:
+    - name: "GPL-3.0"
+      url: "https://github.com/akvicor/plugin-ai-cover/blob/main/LICENSE"

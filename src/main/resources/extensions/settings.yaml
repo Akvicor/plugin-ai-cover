@@ -1,0 +1,57 @@
+apiVersion: v1alpha1
+kind: Setting
+metadata:
+  name: plugin-ai-cover-settings
+spec:
+  forms:
+    - group: default
+      label: 封面生成设置
+      formSchema:
+        - $formkit: textarea
+          name: prompt
+          label: 默认提示词
+          value: "二次元插画风格，画面简洁、现代，不要出现任何文字、字母或水印"
+          placeholder: 请输入生成封面图时使用的默认提示词
+          validation: required
+          help: 打开生成弹窗时会自动填充该提示词，用户可在弹窗中修改。插件会先用语言模型理解文章、生成画面描述，再按该提示词出图
+        - $formkit: aiModelSelector
+          name: descriptionModelName
+          label: 文章理解模型（语言模型）
+          modelType: language
+          validation: required
+          placeholder: 请选择用于理解文章的语言模型
+          help: 第一步用该语言模型阅读文章并生成画面描述，只能选择 AI Foundation 中已配置且启用的语言模型
+        - $formkit: aiModelSelector
+          name: imageModelName
+          label: 图片生成模型
+          modelType: image-generation
+          validation: required
+          placeholder: 请选择用于出图的图片生成模型
+          help: 第二步用该图片模型生成封面图，只能选择 AI Foundation 中已配置且启用的图片生成模型
+        - $formkit: select
+          name: aspectRatio
+          label: 图片宽高比
+          value: "16:9"
+          help: 博客封面建议使用 16:9。部分模型可能不支持所选的宽高比，此时会使用模型默认值
+          options:
+            - label: 16:9（博客封面推荐）
+              value: "16:9"
+            - label: 3:2
+              value: "3:2"
+            - label: 4:3
+              value: "4:3"
+            - label: 1:1
+              value: "1:1"
+            - label: 9:16（竖版）
+              value: "9:16"
+        - $formkit: attachmentPolicySelect
+          name: policyName
+          label: 默认存储策略
+          value: ""
+          validation: required
+          help: 封面图上传到附件库时默认使用的存储策略
+        - $formkit: attachmentGroupSelect
+          name: groupName
+          label: 默认分组
+          value: ""
+          help: 封面图上传到附件库时默认使用的分组，留空表示不分组
