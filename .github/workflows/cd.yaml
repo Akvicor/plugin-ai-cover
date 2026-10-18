@@ -17,7 +17,6 @@ jobs:
       node-version: 22
       pnpm-version: 10
       ui-path: "ui"
-      # 待 Halo 应用市场创建应用后填写真实 app-id
-      app-id: ""
-      # 未在应用市场上架前跳过自动发布；填写 app-id 后移除该项
+      app-id: "app-0rasmdah"
+      # 发布 GitHub Release 时，应用市场发布由此开关控制。
       skip-appstore-release: true
