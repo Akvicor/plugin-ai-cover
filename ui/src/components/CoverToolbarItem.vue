@@ -1,18 +1,47 @@
 <script lang="ts" setup>
+import { Toast } from '@halo-dev/components'
 import { ToolbarItem, type ToolbarItemComponentProps } from '@halo-dev/richtext-editor'
-import { ref } from 'vue'
+import { utils } from '@halo-dev/ui-shared'
+import { getCurrentInstance, ref } from 'vue'
+import type { Attachment } from '@/api'
 import CoverGenerateModal from '@/components/CoverGenerateModal.vue'
 
 const props = defineProps<ToolbarItemComponentProps>()
+const instance = getCurrentInstance()
 
 const open = ref(false)
 
 function handleOpen() {
   open.value = true
 }
+
+function handleUploaded(attachment: Attachment) {
+  const url = utils.attachment.getUrl(attachment)
+  if (!url?.trim()) {
+    Toast.warning('封面图已上传到附件库，但附件地址暂不可用，请从附件库手动选择封面')
+    return
+  }
+
+  // Halo 2.26 的封面绑定由宿主编辑器的 update:cover 事件更新，随文章原有保存流程持久化。
+  // 通过声明的属性与事件定位宿主，兼容中间工具栏组件层级，并保留编辑器内尚未保存的内容。
+  let parent = instance?.proxy?.$parent
+  while (parent) {
+    const emits = parent.$options.emits
+    const supportsCover = Array.isArray(emits)
+      ? emits.includes('update:cover')
+      : emits && 'update:cover' in emits
+    if ('cover' in parent.$props && supportsCover) {
+      parent.$emit('update:cover', url)
+      Toast.success('封面图已上传并设置为当前文章封面，请保存文章')
+      return
+    }
+    parent = parent.$parent
+  }
+  Toast.warning('封面图已上传到附件库，未能自动设置封面，请从附件库手动选择')
+}
 </script>
 
 <template>
   <ToolbarItem v-bind="props" :icon="props.icon" :title="props.title" :action="handleOpen" />
-  <CoverGenerateModal v-if="open" @close="open = false" />
+  <CoverGenerateModal v-if="open" @uploaded="handleUploaded" @close="open = false" />
 </template>

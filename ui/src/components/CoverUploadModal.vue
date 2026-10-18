@@ -2,7 +2,7 @@
 import { coreApiClient, type Group, type Policy } from '@halo-dev/api-client'
 import { Toast, VButton, VLoading, VModal } from '@halo-dev/components'
 import { onMounted, ref, watch } from 'vue'
-import type { CoverConfigResponse } from '@/api'
+import type { Attachment, CoverConfigResponse } from '@/api'
 import { coverApi } from '@/api'
 import { toImageFile } from '@/utils/cover'
 
@@ -15,7 +15,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'close'): void
-  (event: 'uploaded'): void
+  (event: 'uploaded', attachment: Attachment): void
 }>()
 
 const displayName = ref(props.defaultFileName)
@@ -72,14 +72,13 @@ async function handleConfirm() {
   }
   uploading.value = true
   try {
-    await coverApi.upload({
+    const attachment = await coverApi.upload({
       file: toImageFile(props.base64, displayName.value.trim(), props.mediaType),
       displayName: displayName.value.trim(),
       policyName: policyName.value,
       groupName: groupName.value || undefined,
     })
-    Toast.success('封面图已上传到附件库')
-    emit('uploaded')
+    emit('uploaded', attachment)
   } catch (error) {
     console.error('上传封面图失败', error)
   } finally {

@@ -3,7 +3,7 @@ import { Toast, VButton, VLoading, VModal } from '@halo-dev/components'
 import { isAxiosError } from 'axios'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import type { CoverConfigResponse } from '@/api'
+import type { Attachment, CoverConfigResponse } from '@/api'
 import { coverApi } from '@/api'
 import { buildDefaultFileName, toDataUrl } from '@/utils/cover'
 import CoverUploadModal from '@/components/CoverUploadModal.vue'
@@ -15,6 +15,7 @@ interface GeneratedImage {
 
 const emit = defineEmits<{
   (event: 'close'): void
+  (event: 'uploaded', attachment: Attachment): void
 }>()
 
 const route = useRoute()
@@ -134,8 +135,9 @@ async function pollGenerateTask(taskId: string) {
   pollTimer = window.setTimeout(() => pollGenerateTask(taskId), POLL_INTERVAL)
 }
 
-function handleUploaded() {
+function handleUploaded(attachment: Attachment) {
   uploadVisible.value = false
+  emit('uploaded', attachment)
   emit('close')
 }
 </script>
