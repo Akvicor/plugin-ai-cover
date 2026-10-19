@@ -7,6 +7,11 @@ spec:
     - group: default
       label: 封面生成设置
       formSchema:
+        - $formkit: checkbox
+          name: autoGenerateOnPublish
+          label: 发布时自动生成缺失封面
+          value: false
+          help: 文章发布成功后在后台补齐缺失的封面，使用下方模型、提示词、存储策略和分组。进度可在文章列表或生成弹窗查看；失败不影响发布，模型调用可能产生费用
         - $formkit: textarea
           name: prompt
           label: 默认提示词

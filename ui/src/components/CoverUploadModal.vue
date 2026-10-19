@@ -11,6 +11,8 @@ const props = defineProps<{
   mediaType?: string
   defaultFileName: string
   config: CoverConfigResponse
+  /** 编辑器生成任务 ID，上传成功后服务端据此释放保留的图片。 */
+  taskId?: string
 }>()
 
 const emit = defineEmits<{
@@ -77,6 +79,7 @@ async function handleConfirm() {
       displayName: displayName.value.trim(),
       policyName: policyName.value,
       groupName: groupName.value || undefined,
+      taskId: props.taskId,
     })
     emit('uploaded', attachment)
   } catch (error) {

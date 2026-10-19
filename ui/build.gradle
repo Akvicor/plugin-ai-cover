@@ -3,7 +3,7 @@ plugins {
     id "com.github.node-gradle.node" version "7.1.0"
 }
 
-group 'run.halo.aicover.ui'
+group 'com.akvicor.aicover.ui'
 
 tasks.register('pnpmBuild', PnpmTask) {
     group = 'build'

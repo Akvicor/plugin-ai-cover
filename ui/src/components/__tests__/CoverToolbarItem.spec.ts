@@ -14,6 +14,7 @@ vi.mock('@/api', () => ({
     getConfig: vi.fn<typeof coverApi.getConfig>(),
     generate: vi.fn<typeof coverApi.generate>(),
     getGenerateTask: vi.fn<typeof coverApi.getGenerateTask>(),
+    listTasks: vi.fn<typeof coverApi.listTasks>(),
     upload: vi.fn<typeof coverApi.upload>(),
   },
 }))
@@ -86,7 +87,25 @@ describe('上传后设置当前编辑器封面', () => {
     )
     vi.spyOn(coreApiClient.storage.group, 'listGroup').mockResolvedValue(listResponse([]))
     vi.mocked(coverApi.getConfig).mockResolvedValue({ title: '文章标题', prompt: '默认风格' })
-    vi.mocked(coverApi.generate).mockResolvedValue({ taskId: 'task-id', status: 'RUNNING' })
+    vi.mocked(coverApi.generate).mockResolvedValue({
+      taskId: 'task-id',
+      postName: 'post-name',
+      status: 'RUNNING',
+      source: 'EDITOR',
+    })
+    vi.mocked(coverApi.listTasks).mockImplementation(async () => ({
+      tasks: vi.mocked(coverApi.generate).mock.calls.length
+        ? [
+            {
+              taskId: 'task-id',
+              postName: 'post-name',
+              status: 'SUCCEEDED',
+              source: 'EDITOR',
+              imageAvailable: true,
+            },
+          ]
+        : [],
+    }))
     vi.mocked(coverApi.getGenerateTask).mockResolvedValue({
       taskId: 'task-id',
       status: 'SUCCEEDED',
@@ -175,6 +194,7 @@ describe('上传后设置当前编辑器封面', () => {
     const request = vi.mocked(coverApi.upload).mock.calls[0]![0]
     expect(request.displayName).toBe('自定义封面.jpeg')
     expect((request.file as File).name).toBe('自定义封面.jpeg')
+    expect(request.taskId).toBe('task-id')
     expect(formState.cover).toBe('/uploads/cover.png')
   })
 

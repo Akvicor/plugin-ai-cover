@@ -2,12 +2,17 @@
 import { Toast } from '@halo-dev/components'
 import { ToolbarItem, type ToolbarItemComponentProps } from '@halo-dev/richtext-editor'
 import { utils } from '@halo-dev/ui-shared'
-import { getCurrentInstance, ref } from 'vue'
+import { computed, getCurrentInstance, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import type { Attachment } from '@/api'
 import CoverGenerateModal from '@/components/CoverGenerateModal.vue'
 
 const props = defineProps<ToolbarItemComponentProps>()
 const instance = getCurrentInstance()
+const route = useRoute()
+const postName = computed(() =>
+  typeof route.query.name === 'string' ? route.query.name : undefined,
+)
 
 const open = ref(false)
 
@@ -15,7 +20,7 @@ function handleOpen() {
   open.value = true
 }
 
-function handleUploaded(attachment: Attachment) {
+function handleCover(attachment: Attachment, saved = false) {
   const url = utils.attachment.getUrl(attachment)
   if (!url?.trim()) {
     Toast.warning('封面图已上传到附件库，但附件地址暂不可用，请从附件库手动选择封面')
@@ -31,17 +36,28 @@ function handleUploaded(attachment: Attachment) {
       ? emits.includes('update:cover')
       : emits && 'update:cover' in emits
     if ('cover' in parent.$props && supportsCover) {
+      if (saved && typeof parent.$props.cover === 'string' && parent.$props.cover.trim()) return
       parent.$emit('update:cover', url)
-      Toast.success('封面图已上传并设置为当前文章封面，请保存文章')
+      if (!saved) Toast.success('封面图已上传并设置为当前文章封面，请保存文章')
       return
     }
     parent = parent.$parent
   }
-  Toast.warning('封面图已上传到附件库，未能自动设置封面，请从附件库手动选择')
+  Toast.warning(
+    saved
+      ? '封面已保存，当前编辑器未能同步，请在保留编辑内容后重新打开文章'
+      : '封面图已上传到附件库，未能自动设置封面，请从附件库手动选择',
+  )
 }
 </script>
 
 <template>
   <ToolbarItem v-bind="props" :icon="props.icon" :title="props.title" :action="handleOpen" />
-  <CoverGenerateModal v-if="open" @uploaded="handleUploaded" @close="open = false" />
+  <CoverGenerateModal
+    v-if="open"
+    :post-name="postName"
+    @uploaded="handleCover"
+    @applied="(attachment) => handleCover(attachment, true)"
+    @close="open = false"
+  />
 </template>
