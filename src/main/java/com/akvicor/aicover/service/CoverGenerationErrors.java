@@ -22,7 +22,7 @@ import run.halo.aifoundation.exception.UnsupportedModelCapabilityException;
  */
 final class CoverGenerationErrors {
 
-    /** 限制界面中的诊断摘要长度，完整上下文通过任务日志定位。 */
+    /** 限制界面中的诊断摘要长度，任务 ID 用于关联状态与日志。 */
     private static final int MAX_MESSAGE_LENGTH = 500;
 
     private static final Pattern URL = Pattern.compile(

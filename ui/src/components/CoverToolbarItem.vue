@@ -17,6 +17,8 @@ const postName = computed(() =>
 const open = ref(false)
 
 function handleOpen() {
+  // 权限未初始化或用户不是超级管理员时，保持关闭且不发起接口请求。
+  if (!utils.permission.getUserPermissions()?.includes('*')) return
   open.value = true
 }
 
@@ -52,9 +54,15 @@ function handleCover(attachment: Attachment, saved = false) {
 </script>
 
 <template>
-  <ToolbarItem v-bind="props" :icon="props.icon" :title="props.title" :action="handleOpen" />
+  <ToolbarItem
+    v-if="utils.permission.getUserPermissions()?.includes('*')"
+    v-bind="props"
+    :icon="props.icon"
+    :title="props.title"
+    :action="handleOpen"
+  />
   <CoverGenerateModal
-    v-if="open"
+    v-if="open && utils.permission.getUserPermissions()?.includes('*')"
     :post-name="postName"
     @uploaded="handleCover"
     @applied="(attachment) => handleCover(attachment, true)"

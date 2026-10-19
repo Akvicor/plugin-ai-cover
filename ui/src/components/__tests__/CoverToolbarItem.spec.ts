@@ -8,6 +8,8 @@ import { defineComponent, h, reactive } from 'vue'
 import { coverApi, type Attachment } from '@/api'
 import CoverToolbarItem from '@/components/CoverToolbarItem.vue'
 
+const permissionState = vi.hoisted(() => ({ permissions: undefined as string[] | undefined }))
+
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: { name: 'post-name' } }) }))
 vi.mock('@/api', () => ({
   coverApi: {
@@ -37,7 +39,10 @@ vi.mock('@halo-dev/richtext-editor', () => ({
   },
 }))
 vi.mock('@halo-dev/ui-shared', () => ({
-  utils: { attachment: { getUrl: (attachment: Attachment) => attachment.status?.permalink } },
+  utils: {
+    attachment: { getUrl: (attachment: Attachment) => attachment.status?.permalink },
+    permission: { getUserPermissions: () => permissionState.permissions },
+  },
 }))
 
 const toolbarProps = { editor: {} as Editor, isActive: false }
@@ -74,6 +79,7 @@ describe('上传后设置当前编辑器封面', () => {
 
   beforeEach(() => {
     vi.resetAllMocks()
+    permissionState.permissions = ['*']
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(coreApiClient.storage.policy, 'listPolicy').mockResolvedValue(
       listResponse([
@@ -161,6 +167,21 @@ describe('上传后设置当前编辑器封面', () => {
     await clickButton('生成')
     await clickButton('上传')
   }
+
+  it.each([undefined, [], ['core:posts:manage'], ['system:plugins:manage']])(
+    '权限为 %j 时隐藏编辑器入口且不请求插件接口',
+    async (permissions) => {
+      permissionState.permissions = permissions
+      mountEditor()
+      await flushPromises()
+
+      expect(wrapper!.findAll('button')).toHaveLength(0)
+      expect(wrapper!.findAll('section')).toHaveLength(0)
+      expect(coverApi.getConfig).not.toHaveBeenCalled()
+      expect(coverApi.listTasks).not.toHaveBeenCalled()
+      expect(coverApi.generate).not.toHaveBeenCalled()
+    },
+  )
 
   it.each(['', '/uploads/old-cover.png'])('封面原值为 %s 时上传完成后更新绑定', async (cover) => {
     const formState = mountEditor(cover)

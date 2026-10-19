@@ -20,6 +20,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -34,7 +36,7 @@ import com.akvicor.aicover.service.background.CoverSkippedException;
 import com.akvicor.aicover.setting.CoverSettings;
 import run.halo.app.core.extension.attachment.Attachment;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class CoverGenerationTaskServiceTest {
 
     @Mock
@@ -182,6 +184,21 @@ class CoverGenerationTaskServiceTest {
         assertThat(task.getSource()).isEqualTo(Source.PUBLISH);
         assertThat(task.getStatus()).isEqualTo(Status.FAILED);
         assertThat(task.getMessage()).contains("存储策略");
+    }
+
+    @Test
+    void shouldLogFailureWithoutProviderEchoOrStackTrace(CapturedOutput output) {
+        var error = new IllegalStateException("供应商回显：未发布草稿与私密提示词");
+        error.addSuppressed(new IllegalArgumentException("请求体包含保密正文"));
+        when(coverImageService.generate(any(), any(), any(), any())).thenReturn(Mono.error(error));
+
+        var task = awaitTerminalState(taskService.submitEditor("post", "标题", "提示词", "正文"));
+
+        Awaitility.await().atMost(Duration.ofSeconds(3)).untilAsserted(() ->
+            assertThat(output.getAll()).contains(task.getId(), "errorType=IllegalStateException"));
+        assertThat(task.getStatus()).isEqualTo(Status.FAILED);
+        assertThat(output.getAll()).doesNotContain("未发布草稿", "私密提示词", "保密正文",
+            "Suppressed:");
     }
 
     @Test

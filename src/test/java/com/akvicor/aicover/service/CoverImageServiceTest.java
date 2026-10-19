@@ -7,12 +7,18 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.ArrayList;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import reactor.core.publisher.Mono;
 import com.akvicor.aicover.setting.CoverSettingService;
 import com.akvicor.aicover.setting.CoverSettings;
@@ -23,6 +29,7 @@ import run.halo.aifoundation.chat.LanguageModel;
 import run.halo.aifoundation.image.GenerateImageRequest;
 import run.halo.aifoundation.image.GenerateImageResult;
 import run.halo.aifoundation.image.ImageGenerationModel;
+import run.halo.aifoundation.image.ImageGenerationWarning;
 import run.halo.aifoundation.media.GeneratedFile;
 import run.halo.app.plugin.extensionpoint.ExtensionGetter;
 
@@ -30,7 +37,7 @@ import run.halo.app.plugin.extensionpoint.ExtensionGetter;
  * 验证「先理解、再生成」两步调用：语言模型先阅读文章产出画面描述，
  * 图片模型再按该描述出图。
  */
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class CoverImageServiceTest {
 
     @Mock
@@ -50,13 +57,25 @@ class CoverImageServiceTest {
 
     CoverImageService coverImageService;
 
+    private final Logger logger = (Logger) LoggerFactory.getLogger(CoverImageService.class);
+
+    private Level previousLevel;
+
     @BeforeEach
     void setUp() {
+        // 同时验证开启 DEBUG 后内容也不会流入日志。
+        previousLevel = logger.getLevel();
+        logger.setLevel(Level.DEBUG);
         coverImageService = new CoverImageService(extensionGetter, coverSettingService, null);
     }
 
+    @AfterEach
+    void restoreLogLevel() {
+        logger.setLevel(previousLevel);
+    }
+
     @Test
-    void shouldDescribeArticleThenGenerateImage() {
+    void shouldDescribeArticleThenGenerateImage(CapturedOutput output) {
         var settings = new CoverSettings();
         settings.setPrompt("二次元插画风格");
         settings.setDescriptionModelName("lang-model");
@@ -76,6 +95,8 @@ class CoverImageServiceTest {
         when(imageGenerationModel.generateImage(any(GenerateImageRequest.class)))
             .thenReturn(Mono.just(GenerateImageResult.builder()
                 .images(List.of(GeneratedFile.base64("aW1n", "image/png")))
+                .warnings(List.of(ImageGenerationWarning.builder()
+                    .message("供应商回显内容：apt install caddy").build()))
                 .build()));
 
         var stages = new ArrayList<CoverGenerationTask.Stage>();
@@ -103,6 +124,10 @@ class CoverImageServiceTest {
         assertThat(image).isNotNull();
         assertThat(image.mediaType()).isEqualTo("image/png");
         assertThat(image.base64()).isEqualTo("aW1n");
+        // 内容仍发送给模型，但日志不得输出文章、提示词、描述或供应商回显。
+        assertThat(output.getAll()).contains("modelName=lang-model", "count=1")
+            .doesNotContain("Caddy 安装", "apt install caddy", "二次元插画风格",
+                "银发少女站在发光的服务器机房中", "供应商回显内容");
     }
 
     @Test

@@ -102,13 +102,7 @@ public class CoverImageService {
      */
     private Mono<String> describe(CoverSettings settings, String title, String content) {
         var article = CoverPromptComposer.composeArticle(title, content);
-        log.info("""
-            封面图第一步（理解文章）请求:
-            modelName={}
-            ---------- 文章原文开始 ----------
-            {}
-            ---------- 文章原文结束 ----------""",
-            settings.getDescriptionModelName(), article);
+        log.debug("正在理解文章: modelName={}", settings.getDescriptionModelName());
         return resolveLanguageModel(settings.getDescriptionModelName())
             .flatMap(model -> model.generateText(GenerateTextRequest.builder()
                 .system(DESCRIPTION_SYSTEM_PROMPT)
@@ -123,12 +117,7 @@ public class CoverImageService {
             .map(result -> result.getText() == null ? "" : result.getText().strip())
             .filter(StringUtils::hasText)
             .switchIfEmpty(Mono.error(new IllegalStateException(
-                "语言模型没有返回画面描述，请检查所选模型是否可用")))
-            .doOnNext(description -> log.info("""
-                封面图第一步（理解文章）结果:
-                ---------- 画面描述开始 ----------
-                {}
-                ---------- 画面描述结束 ----------""", description));
+                "语言模型没有返回画面描述，请检查所选模型是否可用")));
     }
 
     /**
@@ -137,13 +126,7 @@ public class CoverImageService {
     private Mono<GeneratedImage> doGenerate(CoverSettings settings, String prompt,
         String description) {
         var composedPrompt = CoverPromptComposer.composeImagePrompt(prompt, description);
-        log.info("""
-            封面图第二步（出图）请求:
-            modelName={}, aspectRatio={}
-            ---------- prompt 原文开始 ----------
-            {}
-            ---------- prompt 原文结束 ----------""",
-            settings.getImageModelName(), settings.getAspectRatio(), composedPrompt);
+        log.debug("正在生成封面图: modelName={}", settings.getImageModelName());
         return resolveImageModel(settings.getImageModelName())
             .flatMap(model -> model.generateImage(GenerateImageRequest.builder()
                 .prompt(composedPrompt)
@@ -188,10 +171,9 @@ public class CoverImageService {
         if (images == null || images.isEmpty()) {
             return Mono.error(new IllegalStateException("图片生成模型没有返回任何图片"));
         }
-        // 警告通常表示模型忽略了某个请求参数（例如尺寸、返回格式、张数），
-        // 打印出来便于判断实际生效的参数。
+        // 供应商警告可能回显请求内容，日志只记录数量。
         if (result.getWarnings() != null && !result.getWarnings().isEmpty()) {
-            log.info("封面图生成模型返回警告: {}", result.getWarnings());
+            log.debug("封面图生成模型返回警告: count={}", result.getWarnings().size());
         }
         var file = images.getFirst();
         if (file.isBase64()) {
@@ -236,7 +218,7 @@ public class CoverImageService {
         var detected = sniffMediaType(bytes);
         if (detected != null && (declared == null || !declared.equalsIgnoreCase(detected))) {
             if (StringUtils.hasText(declared)) {
-                log.info("图片实际类型与模型声明不一致: declared={}, detected={}", declared, detected);
+                log.debug("图片格式已按文件头校正: detected={}", detected);
             }
             return detected;
         }

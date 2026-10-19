@@ -74,8 +74,10 @@ public class PostCoverService {
             // Halo 删除扩展需要携带版本号，因此先读取最新的附件对象。
             .flatMap(ignored -> client.fetch(Attachment.class, name))
             .flatMap(client::delete)
-            .doOnError(error -> log.warn("删除未使用的封面附件失败: attachment={}, postName={}",
-                name, postName, error))
+            // 存储异常可能携带请求或凭据，日志以附件标识和错误类型定位失败。
+            .doOnError(error -> log.warn(
+                "删除未使用的封面附件失败: attachment={}, postName={}, errorType={}",
+                name, postName, error.getClass().getSimpleName()))
             .onErrorResume(error -> Mono.empty())
             .then();
     }

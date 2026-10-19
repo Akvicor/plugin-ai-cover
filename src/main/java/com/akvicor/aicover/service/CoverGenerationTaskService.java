@@ -189,8 +189,9 @@ public class CoverGenerationTaskService {
                 if (task != null) {
                     task.finish(Status.FAILED, message, null);
                 }
-                log.warn("封面后台处理失败: taskId={}, postName={}, reason={}",
-                    traceId, postName, message);
+                // 异常说明可能包含供应商回显的用户内容，日志只保留定位信息和错误类型。
+                log.warn("封面后台处理失败: taskId={}, postName={}, errorType={}",
+                    traceId, postName, error.getClass().getSimpleName());
             }, () -> {
                 if (task != null) {
                     task.finish(Status.FAILED, "封面任务未返回结果", null);

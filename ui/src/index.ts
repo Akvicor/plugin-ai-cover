@@ -16,7 +16,8 @@ export default definePlugin({
           priority: 21,
           component: markRaw(VDropdownItem),
           label: hasCover ? 'AI 生成封面' : 'AI 补充封面',
-          permissions: ['system:plugins:manage'],
+          // Halo 的超级管理员拥有通配符 UI 权限，与插件 API 的默认访问范围一致。
+          permissions: ['*'],
           action: () =>
             submitBackgroundCover(post.value.post.metadata.name, hasCover ? 'REPLACE' : 'FILL'),
         },
@@ -27,7 +28,7 @@ export default definePlugin({
         priority: 60,
         position: 'end',
         component: markRaw(CoverTaskField),
-        permissions: ['system:plugins:manage'],
+        permissions: ['*'],
         props: {
           postName: post.value.post.metadata.name,
           cover: post.value.post.spec.cover,

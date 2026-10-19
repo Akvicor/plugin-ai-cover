@@ -89,7 +89,7 @@ describe('文章列表封面菜单与状态徽标', () => {
     const replace = create(listed('/old.png'))[0] as OperationItem<ListedPost>
     expect(fill.label).toBe('AI 补充封面')
     expect(replace.label).toBe('AI 生成封面')
-    expect(fill.permissions).toEqual(['system:plugins:manage'])
+    expect(fill.permissions).toEqual(['*'])
 
     await fill.action?.()
     await replace.action?.()
@@ -98,6 +98,7 @@ describe('文章列表封面菜单与状态徽标', () => {
 
     const field = plugin.extensionPoints!['post:list-item:field:create']!(listed('/old.png'))[0]!
     expect(field.props).toEqual({ postName: 'post', cover: '/old.png' })
+    expect(field.permissions).toEqual(['*'])
   })
 
   it('显示列表与发布任务的进行中状态，编辑器任务不显示', async () => {

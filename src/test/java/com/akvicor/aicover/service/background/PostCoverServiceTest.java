@@ -16,6 +16,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.dao.OptimisticLockingFailureException;
 import reactor.core.publisher.Mono;
 import com.akvicor.aicover.service.CoverGenerationTask.Mode;
@@ -24,7 +26,7 @@ import run.halo.app.core.extension.content.Post;
 import run.halo.app.extension.Metadata;
 import run.halo.app.extension.ReactiveExtensionClient;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class PostCoverServiceTest {
 
     @Mock
@@ -131,6 +133,20 @@ class PostCoverServiceTest {
         service.discard("post", attachment("image")).block();
         verify(client, times(1)).fetch(Attachment.class, "image");
         verify(client, never()).delete(any());
+    }
+
+    @Test
+    void shouldLogCleanupFailureWithoutStorageResponse(CapturedOutput output) {
+        when(client.fetch(Post.class, "post")).thenReturn(Mono.empty());
+        var latest = attachment("image");
+        when(client.fetch(Attachment.class, "image")).thenReturn(Mono.just(latest));
+        when(client.delete(latest)).thenReturn(Mono.error(
+            new IllegalStateException("存储响应包含私密请求内容")));
+
+        service.discard("post", latest).block();
+
+        assertThat(output.getAll()).contains("attachment=image", "errorType=IllegalStateException")
+            .doesNotContain("存储响应包含私密请求内容", "at com.akvicor");
     }
 
     private Post post(String cover) {
