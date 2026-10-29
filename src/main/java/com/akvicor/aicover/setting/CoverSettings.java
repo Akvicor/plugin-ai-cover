@@ -1,5 +1,7 @@
 package com.akvicor.aicover.setting;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 import lombok.Data;
 
 /**
@@ -26,6 +28,10 @@ public class CoverSettings {
 
     /** 图片宽高比，例如 16:9；为空时不指定。 */
     private String aspectRatio;
+
+    /** PNG 的独立压缩方式；缺少配置时保持模型原图。 */
+    @JsonSetter(nulls = Nulls.SKIP)
+    private PngCompressionMode pngCompressionMode = PngCompressionMode.NONE;
 
     /** 上传封面图时默认使用的附件存储策略 metadata.name。 */
     private String policyName;

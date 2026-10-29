@@ -8,6 +8,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
+import com.akvicor.aicover.image.png.PngCompressor;
+import com.akvicor.aicover.setting.PngCompressionMode;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import javax.imageio.ImageIO;
 import java.util.Base64;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,11 +67,13 @@ class CoverImageResponseTest {
 
     CoverImageService service;
 
+    CoverSettings settings;
+
     @BeforeEach
     void setUp() {
         service = new CoverImageService(extensionGetter, settingService,
-            WebClient.builder().exchangeFunction(exchangeFunction).build());
-        var settings = new CoverSettings();
+            WebClient.builder().exchangeFunction(exchangeFunction).build(), new PngCompressor());
+        settings = new CoverSettings();
         settings.setDescriptionModelName("language");
         settings.setImageModelName("image");
         when(settingService.getSettings()).thenReturn(Mono.just(settings));
@@ -151,6 +159,22 @@ class CoverImageResponseTest {
     void shouldKeepRemoteAddressRestrictions(String url) {
         assertThatThrownBy(() -> generate(GeneratedFile.url(url, null)))
             .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(exchangeFunction);
+    }
+
+    @Test
+    void shouldCompressDataUrlBeforeReturningTheGeneratedImage() throws Exception {
+        settings.setPngCompressionMode(PngCompressionMode.WHITE_BACKGROUND);
+        var source = new BufferedImage(2, 1, BufferedImage.TYPE_INT_ARGB);
+        source.setRGB(1, 0, 0x80ff0000);
+        var output = new ByteArrayOutputStream();
+        ImageIO.write(source, "PNG", output);
+        var payload = Base64.getEncoder().encodeToString(output.toByteArray());
+        var image = generate(GeneratedFile.url("data:image/png;base64," + payload, null));
+        var actual = ImageIO.read(new ByteArrayInputStream(Base64.getDecoder().decode(image.base64())));
+        assertThat(actual.getRGB(0, 0)).isEqualTo(0xffffffff);
+        assertThat(actual.getRGB(1, 0)).isEqualTo(0xffff7f7f);
+        assertThat(actual.getColorModel().hasAlpha()).isFalse();
         verifyNoInteractions(exchangeFunction);
     }
 

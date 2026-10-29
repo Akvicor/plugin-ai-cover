@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import com.akvicor.aicover.image.png.PngCompressor;
 import java.util.ArrayList;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -66,7 +67,8 @@ class CoverImageServiceTest {
         // 同时验证开启 DEBUG 后内容也不会流入日志。
         previousLevel = logger.getLevel();
         logger.setLevel(Level.DEBUG);
-        coverImageService = new CoverImageService(extensionGetter, coverSettingService, null);
+        coverImageService = new CoverImageService(extensionGetter, coverSettingService, null,
+            new PngCompressor());
     }
 
     @AfterEach

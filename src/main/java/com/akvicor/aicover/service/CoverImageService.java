@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.function.Consumer;
+import com.akvicor.aicover.image.png.PngCompressor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -76,6 +77,8 @@ public class CoverImageService {
 
     private final WebClient coverImageWebClient;
 
+    private final PngCompressor pngCompressor;
+
     /**
      * 生成一张封面图：先用语言模型理解文章，再用图片模型出图。
      *
@@ -143,7 +146,8 @@ public class CoverImageService {
                     .totalTimeout(GENERATION_TIMEOUT)
                     .build())
                 .build()))
-            .flatMap(this::toGeneratedImage);
+            .flatMap(this::toGeneratedImage)
+            .flatMap(image -> pngCompressor.compress(image, settings.getPngCompressionMode()));
     }
 
     private Mono<LanguageModel> resolveLanguageModel(String modelName) {

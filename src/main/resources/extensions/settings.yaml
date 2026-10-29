@@ -49,6 +49,19 @@ spec:
               value: "1:1"
             - label: 9:16（竖版）
               value: "9:16"
+        - $formkit: select
+          name: pngCompressionMode
+          label: PNG 压缩方式
+          value: NONE
+          validation: required
+          help: 仅处理生成的静态 PNG，保持尺寸。白底合成将透明区域与白色混合；去透明保留像素原始 RGB，原本隐藏的颜色会显示出来。两者均进行有损 256 色量化，预览和附件共用结果，其他格式保持原样
+          options:
+            - label: 不处理
+              value: NONE
+            - label: 256 色压缩（白底合成）
+              value: WHITE_BACKGROUND
+            - label: 256 色压缩（去透明）
+              value: REMOVE_ALPHA
         - $formkit: attachmentPolicySelect
           name: policyName
           label: 默认存储策略
