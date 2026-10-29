@@ -19,4 +19,4 @@ jobs:
       ui-path: "ui"
       app-id: "app-0rasmdah"
       # 发布 GitHub Release 时，应用市场发布由此开关控制。
-      skip-appstore-release: true
+      skip-appstore-release: false
