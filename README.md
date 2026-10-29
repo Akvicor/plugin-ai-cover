@@ -163,10 +163,6 @@ make build VERSION=0.2.0 OUTPUT=build/release/0.2.0/plugin-ai-cover-0.2.0.jar
 
 该命令将版本写入插件元数据，并将包含前端资源的 JAR 放入指定目录。
 
-## 版本说明
-
-各版本的功能、权限与数据处理变化见 [CHANGELOG.md](./CHANGELOG.md)。发布时将对应版本说明填写到 GitHub Release 和应用市场，并使用同一版本源码构建的 JAR。
-
 ## 许可证
 
 [GPL-3.0](./LICENSE)
