@@ -3,12 +3,14 @@ package com.akvicor.aicover.service;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -178,9 +180,46 @@ public class CoverImageService {
         var file = images.getFirst();
         if (file.isBase64()) {
             var bytes = Base64.getDecoder().decode(file.getBase64());
-            return Mono.just(new GeneratedImage(file.getBase64(), resolveMediaType(bytes, file)));
+            return Mono.just(new GeneratedImage(file.getBase64(),
+                resolveMediaType(bytes, file.getMediaType())));
         }
-        return download(file.getUrl(), file);
+        var url = file.getUrl();
+        if (url != null && url.regionMatches(true, 0, "data:", 0, 5)) {
+            return Mono.fromCallable(() -> decodeDataUrl(url));
+        }
+        return download(url, file);
+    }
+
+    /** 将模型在 URL 字段返回的 Base64 图片 Data URL 解码，复用文件头识别校正媒体类型。 */
+    private static GeneratedImage decodeDataUrl(String url) {
+        var comma = url.indexOf(',');
+        if (comma < 0) {
+            throw new IllegalArgumentException("图片 Data URL 缺少数据分隔符");
+        }
+        var metadata = url.substring(5, comma);
+        if (!metadata.regionMatches(true, metadata.length() - 7, ";base64", 0, 7)) {
+            throw new IllegalArgumentException("图片 Data URL 必须使用 Base64 编码");
+        }
+        final MediaType mediaType;
+        final byte[] bytes;
+        try {
+            mediaType = MediaType.parseMediaType(metadata.substring(0, metadata.length() - 7));
+            // URI 解码保留 Base64 中的加号，并支持 %2B、%2F、%3D 等转义。
+            var base64 = StringUtils.uriDecode(url.substring(comma + 1), StandardCharsets.UTF_8);
+            bytes = Base64.getDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
+            // 解析异常可能包含原始图片数据，只向任务状态传递可操作的错误信息。
+            throw new IllegalArgumentException("图片 Data URL 的媒体类型或 Base64 数据无效");
+        }
+        if (!"image".equalsIgnoreCase(mediaType.getType()) || !mediaType.isConcrete()) {
+            throw new IllegalArgumentException("图片 Data URL 必须声明具体的 image 媒体类型");
+        }
+        if (bytes.length == 0) {
+            throw new IllegalArgumentException("图片 Data URL 内容为空");
+        }
+        var declared = mediaType.getType() + "/" + mediaType.getSubtype();
+        return new GeneratedImage(Base64.getEncoder().encodeToString(bytes),
+            resolveMediaType(bytes, declared));
     }
 
     /**
@@ -204,7 +243,8 @@ public class CoverImageService {
                 .retrieve()
                 .bodyToMono(byte[].class))
             .map(bytes -> new GeneratedImage(
-                Base64.getEncoder().encodeToString(bytes), resolveMediaType(bytes, file)));
+                Base64.getEncoder().encodeToString(bytes),
+                resolveMediaType(bytes, file.getMediaType())));
     }
 
     /**
@@ -213,8 +253,7 @@ public class CoverImageService {
      * <p>优先使用模型声明的类型；缺失或与实际字节不符时，按文件头魔数判断，
      * 最后回退到默认类型。
      */
-    private static String resolveMediaType(byte[] bytes, GeneratedFile file) {
-        var declared = file.getMediaType();
+    private static String resolveMediaType(byte[] bytes, String declared) {
         var detected = sniffMediaType(bytes);
         if (detected != null && (declared == null || !declared.equalsIgnoreCase(detected))) {
             if (StringUtils.hasText(declared)) {
