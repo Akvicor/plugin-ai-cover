@@ -2,6 +2,8 @@
 
 为 Halo 博客提供 AI 封面图生成能力的插件。通过 [AI Foundation](https://github.com/halo-dev/plugin-ai-foundation) 调用语言模型理解文章，再由图片模型根据画面描述与用户提示词生成封面图，并上传到附件库。
 
+使用说明与开发背景见博客文章：[Halo 插件：AI 封面生成](https://www.ksyaki.com/archives/halocha-jian-ai-feng-mian-sheng-cheng)。
+
 ## 功能特性
 
 - 根据文章标题和正文生成 AI 封面，可选择模型、自定义提示词和图片比例。
