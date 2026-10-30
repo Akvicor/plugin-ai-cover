@@ -53,6 +53,40 @@ public class CoverSettings {
     @JsonSetter(nulls = Nulls.SKIP)
     private PngCompressionMode pngCompressionMode = PngCompressionMode.NONE;
 
+    /** JPEG 独立压缩设置，缺省保持原图。 */
+    @JsonSetter(nulls = Nulls.SKIP)
+    private QualityCompressionMode jpegCompressionMode = QualityCompressionMode.NONE;
+
+    /** JPEG 重新编码的质量，范围为 1–100。 */
+    private int jpegQuality = 80;
+
+    /** WebP 独立压缩设置，缺省保持原图。 */
+    @JsonSetter(nulls = Nulls.SKIP)
+    private QualityCompressionMode webpCompressionMode = QualityCompressionMode.NONE;
+
+    /** WebP 颜色重新编码的质量，透明通道保持原精度。 */
+    private int webpQuality = 80;
+
+    /** 校验 JPEG 质量；配置未提供或为 null 时使用默认值。 */
+    @JsonSetter(nulls = Nulls.SKIP)
+    public void setJpegQuality(Number value) {
+        this.jpegQuality = requireQuality(value);
+    }
+
+    /** 校验 WebP 质量；配置未提供或为 null 时使用默认值。 */
+    @JsonSetter(nulls = Nulls.SKIP)
+    public void setWebpQuality(Number value) {
+        this.webpQuality = requireQuality(value);
+    }
+
+    private static int requireQuality(Number value) {
+        int quality = value.intValue();
+        if (quality < 1 || quality > 100 || value.doubleValue() != quality) {
+            throw new IllegalArgumentException("图片质量必须是 1–100 之间的整数");
+        }
+        return quality;
+    }
+
     /** 上传封面图时默认使用的附件存储策略 metadata.name。 */
     private String policyName;
 

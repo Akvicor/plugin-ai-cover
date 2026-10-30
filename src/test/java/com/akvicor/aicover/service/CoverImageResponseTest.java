@@ -9,6 +9,9 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import com.akvicor.aicover.image.png.PngCompressor;
+import com.akvicor.aicover.image.GeneratedImageCompressor;
+import com.akvicor.aicover.image.fixtures.ImageSamples;
+import com.akvicor.aicover.setting.QualityCompressionMode;
 import com.akvicor.aicover.setting.PngCompressionMode;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -68,7 +71,8 @@ class CoverImageResponseTest {
     @BeforeEach
     void setUp() {
         service = new CoverImageService(extensionGetter,
-            WebClient.builder().exchangeFunction(exchangeFunction).build(), new PngCompressor());
+            WebClient.builder().exchangeFunction(exchangeFunction).build(),
+            new GeneratedImageCompressor(new PngCompressor()));
         settings = new CoverSettings();
         settings.setDescriptionModelName("language");
         settings.setImageModelName("image");
@@ -177,6 +181,40 @@ class CoverImageResponseTest {
         assertThat(actual.getRGB(1, 0)).isEqualTo(0xffff7f7f);
         assertThat(actual.getColorModel().hasAlpha()).isFalse();
         verifyNoInteractions(exchangeFunction);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"jpeg", "webp"})
+    void shouldProcessAiQualityFormatsAndReportCompression(String format) throws Exception {
+        settings.setJpegCompressionMode(QualityCompressionMode.QUALITY);
+        settings.setWebpCompressionMode(QualityCompressionMode.QUALITY);
+        var source = ImageSamples.scene(format.equals("webp"));
+        byte[] original = format.equals("jpeg") ? ImageSamples.jpeg(source, 100)
+            : ImageSamples.webp(source, 100, true);
+        // 供应商声明故意与实际字节不同，验证按实际格式路由到对应压缩设置。
+        var file = GeneratedFile.base64(Base64.getEncoder().encodeToString(original), "image/png");
+        when(imageModel.generateImage(any(GenerateImageRequest.class))).thenReturn(Mono.just(
+            GenerateImageResult.builder().images(List.of(file)).build()));
+        var stages = new java.util.ArrayList<CoverGenerationTask.Stage>();
+        var image = service.generate(settings, "标题", "风格", "正文", stages::add)
+            .block(Duration.ofSeconds(20));
+        assertThat(image.mediaType()).isEqualTo("image/" + format);
+        assertThat(Base64.getDecoder().decode(image.base64()).length).isLessThan(original.length);
+        assertThat(stages).containsExactly(CoverGenerationTask.Stage.DESCRIBING,
+            CoverGenerationTask.Stage.GENERATING, CoverGenerationTask.Stage.COMPRESSING);
+        verify(imageModel).generateImage(any(GenerateImageRequest.class));
+        verifyNoInteractions(exchangeFunction);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"image/jpeg", "image/webp"})
+    void qualityProcessingFailureShouldNotGenerateAnotherImage(String mediaType) {
+        settings.setJpegCompressionMode(QualityCompressionMode.QUALITY);
+        settings.setWebpCompressionMode(QualityCompressionMode.QUALITY);
+        var payload = Base64.getEncoder().encodeToString(new byte[] {1, 2, 3});
+        assertThatThrownBy(() -> generate(GeneratedFile.base64(payload, mediaType)))
+            .hasMessageContaining("图片压缩失败");
+        verify(imageModel).generateImage(any(GenerateImageRequest.class));
     }
 
     private GeneratedImage generate(GeneratedFile file) {

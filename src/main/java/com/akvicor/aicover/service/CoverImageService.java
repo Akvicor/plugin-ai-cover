@@ -13,7 +13,7 @@ import run.halo.aifoundation.exception.InvalidMediaContentException;
 import run.halo.aifoundation.exception.UnsupportedModelCapabilityException;
 import run.halo.aifoundation.exception.ProviderApiException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-import com.akvicor.aicover.image.png.PngCompressor;
+import com.akvicor.aicover.image.GeneratedImageCompressor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -80,7 +80,7 @@ public class CoverImageService {
 
     private final WebClient coverImageWebClient;
 
-    private final PngCompressor pngCompressor;
+    private final GeneratedImageCompressor imageCompressor;
 
     /**
      * 生成一张封面图：先用语言模型理解文章，再用图片模型出图。
@@ -154,7 +154,7 @@ public class CoverImageService {
                 .switchIfEmpty(Mono.error(new IllegalStateException("图片生成模型没有返回任何图片")))
                 .retryWhen(stageRetry()))
             .flatMap(this::toGeneratedImage)
-            .flatMap(image -> pngCompressor.compress(image, settings.getPngCompressionMode(),
+            .flatMap(image -> imageCompressor.compress(image, settings,
                 () -> progress.accept(Stage.COMPRESSING)));
     }
 

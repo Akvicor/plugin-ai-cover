@@ -63,7 +63,7 @@ spec:
           label: PNG 压缩方式
           value: NONE
           validation: required
-          help: 仅处理生成的静态 PNG，保持尺寸。白底合成将透明区域与白色混合；去透明保留像素原始 RGB，原本隐藏的颜色会显示出来。两者均进行有损 256 色量化，预览和附件共用结果，其他格式保持原样
+          help: 处理静态 PNG，保持尺寸。白底合成将透明区域与白色混合；去透明保留像素原始 RGB，原本隐藏的颜色会显示出来。两者均进行有损 256 色量化，预览和附件共用结果
           options:
             - label: 不处理
               value: NONE
@@ -71,6 +71,50 @@ spec:
               value: WHITE_BACKGROUND
             - label: 256 色压缩（去透明）
               value: REMOVE_ALPHA
+        - $formkit: select
+          name: jpegCompressionMode
+          id: aiCoverJpegCompressionMode
+          label: JPEG 压缩方式
+          value: NONE
+          validation: required
+          options:
+            - label: 不处理
+              value: NONE
+            - label: 质量压缩
+              value: QUALITY
+          help: 保持 JPEG 格式和尺寸；重新编码后体积更小时采用压缩结果
+        - $formkit: number
+          if: "$get(aiCoverJpegCompressionMode).value === 'QUALITY'"
+          name: jpegQuality
+          label: JPEG 图片质量
+          value: 80
+          min: 1
+          max: 100
+          step: 1
+          validation: 'required|number|between:1,100|matches:/^\d+$/'
+          help: 数值越高通常画质越好、文件越大；范围 1–100，默认 80，属于有损压缩
+        - $formkit: select
+          name: webpCompressionMode
+          id: aiCoverWebpCompressionMode
+          label: WebP 压缩方式
+          value: NONE
+          validation: required
+          options:
+            - label: 不处理
+              value: NONE
+            - label: 质量压缩
+              value: QUALITY
+          help: 保持静态 WebP 的格式、尺寸和透明度；重新编码后体积更小时采用压缩结果
+        - $formkit: number
+          if: "$get(aiCoverWebpCompressionMode).value === 'QUALITY'"
+          name: webpQuality
+          label: WebP 图片质量
+          value: 80
+          min: 1
+          max: 100
+          step: 1
+          validation: 'required|number|between:1,100|matches:/^\d+$/'
+          help: 数值越高通常画质越好、文件越大；范围 1–100，默认 80，颜色采用有损压缩，透明度保留原精度
         - $formkit: attachmentPolicySelect
           name: policyName
           label: 默认存储策略

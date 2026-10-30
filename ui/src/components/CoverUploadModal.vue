@@ -74,9 +74,10 @@ async function handleConfirm() {
   }
   uploading.value = true
   try {
+    const file = toImageFile(props.base64, displayName.value.trim(), props.mediaType)
     const attachment = await coverApi.upload({
-      file: toImageFile(props.base64, displayName.value.trim(), props.mediaType),
-      displayName: displayName.value.trim(),
+      file,
+      displayName: file.name,
       policyName: policyName.value,
       groupName: groupName.value || undefined,
       taskId: props.taskId,

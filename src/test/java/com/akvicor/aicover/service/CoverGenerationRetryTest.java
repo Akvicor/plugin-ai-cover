@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.akvicor.aicover.image.png.PngCompressor;
+import com.akvicor.aicover.image.GeneratedImageCompressor;
 import com.akvicor.aicover.setting.CoverSettings;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +38,8 @@ class CoverGenerationRetryTest {
     private final ExtensionGetter extensions = mock(ExtensionGetter.class);
     private final AiModelService models = mock(AiModelService.class);
     private final CoverSettings settings = new CoverSettings();
-    private final CoverImageService service = new CoverImageService(extensions, null, new PngCompressor());
+    private final CoverImageService service = new CoverImageService(extensions, null,
+        new GeneratedImageCompressor(new PngCompressor()));
 
     @BeforeEach
     void configure() {

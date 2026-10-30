@@ -37,12 +37,16 @@ export function toDataUrl(base64: string, mediaType?: string): string {
   return `data:${mediaType || 'image/png'};base64,${base64}`
 }
 
-/** 将预览图片转换为二进制文件，保留用户确认的完整附件名称与媒体类型。 */
+/** 将预览图片转换为二进制文件，后缀统一为 .jpg、.png 或 .webp，保留名称主体与媒体类型。 */
 export function toImageFile(base64: string, fileName: string, mediaType?: string): File {
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index++) {
     bytes[index] = binary.charCodeAt(index)
   }
-  return new File([bytes], fileName, { type: mediaType || 'image/png' })
+  const normalizedName = fileName.replace(/\.(jpe?g|png|webp)$/i, (extension) => {
+    const suffix = extension.toLowerCase()
+    return suffix === '.jpeg' ? '.jpg' : suffix
+  })
+  return new File([bytes], normalizedName, { type: mediaType || 'image/png' })
 }

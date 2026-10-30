@@ -15,6 +15,8 @@ dependencies {
     compileOnly 'run.halo.app:api'
     // AI Foundation 公共 SDK，仅编译期依赖，运行期由 AI Foundation 插件提供
     compileOnly 'run.halo.aifoundation:api:1.0.0'
+    // 为 AI 返回的 WebP 提供编解码能力；JPEG 使用 JDK 编码器。
+    implementation 'com.github.usefulness:webp-imageio:0.11.0'
 
     testImplementation 'run.halo.app:api'
     testImplementation 'run.halo.aifoundation:api:1.0.0'
@@ -50,6 +52,14 @@ tasks.register('processUiResources', Sync) {
 
 tasks.named('classes') {
     dependsOn tasks.named('processUiResources')
+}
+
+tasks.named('jar') {
+    // 保留插件自身的许可证，与打包依赖附带的许可证分别标识。
+    from('LICENSE') {
+        into 'META-INF/licenses'
+        rename { 'plugin-ai-cover-LICENSE' }
+    }
 }
 
 halo {

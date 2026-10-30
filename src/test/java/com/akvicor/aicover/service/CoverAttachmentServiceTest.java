@@ -36,8 +36,14 @@ class CoverAttachmentServiceTest {
     @InjectMocks
     CoverAttachmentService service;
 
-    @Test
-    void shouldPreserveFileBytesAndSetNameBeforeCreation() {
+    @ParameterizedTest
+    @CsvSource({"自定义封面.jpeg,自定义封面.jpg", "自定义封面.jpg,自定义封面.jpg",
+        "自定义封面.JPEG,自定义封面.jpg", "自定义封面.JPG,自定义封面.jpg",
+        "Cover.Jpg,Cover.jpg", "Cover.JpEg,Cover.jpg",
+        "Cover.PNG,Cover.png", "Cover.PnG,Cover.png",
+        "Cover.WEBP,Cover.webp", "Cover.WebP,Cover.webp",
+        "封面.jpeg.png,封面.jpeg.png"})
+    void shouldPreserveFileBytesAndSetNameBeforeCreation(String displayName, String expectedName) {
         var bytes = new byte[] {0, (byte) 255, (byte) 128, 66};
         var source = new SimpleFilePart("provider-name.jpg",
             Flux.just(new DefaultDataBufferFactory().wrap(bytes)), MediaType.IMAGE_JPEG);
@@ -50,12 +56,12 @@ class CoverAttachmentServiceTest {
                 return Mono.just(attachment);
             });
 
-        var attachment = service.upload("admin", "policy", " ", "自定义封面.jpg", source).block();
+        var attachment = service.upload("admin", "policy", " ", displayName, source).block();
 
-        assertThat(attachment.getSpec().getDisplayName()).isEqualTo("自定义封面.jpg");
+        assertThat(attachment.getSpec().getDisplayName()).isEqualTo(expectedName);
         var file = ArgumentCaptor.forClass(FilePart.class);
         verify(attachmentService).upload(eq("admin"), eq("policy"), isNull(), file.capture(), any());
-        assertThat(file.getValue().filename()).isEqualTo("自定义封面.jpg");
+        assertThat(file.getValue().filename()).isEqualTo(expectedName);
         assertThat(file.getValue().headers().getContentType()).isEqualTo(MediaType.IMAGE_JPEG);
         var buffer = DataBufferUtils.join(file.getValue().content()).block();
         assertThat(buffer).isNotNull();
@@ -85,7 +91,7 @@ class CoverAttachmentServiceTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"image/png,png", "image/jpeg,jpg", "image/webp,webp"})
+    @CsvSource({"image/png,png", "image/jpeg,jpg", "image/jpg,jpg", "image/webp,webp"})
     void shouldSaveBackgroundImageWithDetectedExtensionAndAuthor(String mediaType, String extension) {
         var bytes = new byte[] {0, (byte) 255, 66};
         when(attachmentService.upload(eq("author"), eq("policy"), eq("covers"),

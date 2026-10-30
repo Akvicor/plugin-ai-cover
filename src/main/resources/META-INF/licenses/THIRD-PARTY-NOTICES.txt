@@ -1,0 +1,17 @@
+图片编解码依赖
+
+webp-imageio 0.11.0
+项目：https://github.com/usefulness/webp-imageio
+许可证：Apache License 2.0；完整文本及上游声明随依赖打包在 JAR 根目录的 LICENSE 和 NOTICE。
+
+Kotlin Standard Library 2.4.0
+项目：https://github.com/JetBrains/kotlin
+用途：webp-imageio 的运行时依赖。
+许可证：Apache License 2.0；完整文本见 JAR 根目录的 LICENSE。
+
+libwebp
+项目：https://chromium.googlesource.com/webm/libwebp/
+用途：webp-imageio 随附的原生编解码库。
+许可证及附加专利授权：见本目录 libwebp-COPYING 与 libwebp-PATENTS。
+
+本插件自身许可证见本目录 plugin-ai-cover-LICENSE。

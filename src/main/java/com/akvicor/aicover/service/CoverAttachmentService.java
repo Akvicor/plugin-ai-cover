@@ -2,6 +2,7 @@ package com.akvicor.aicover.service;
 
 import java.util.Base64;
 import java.util.Locale;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.HttpHeaders;
@@ -22,6 +23,9 @@ import run.halo.app.core.extension.service.AttachmentService;
 @Component
 @RequiredArgsConstructor
 public class CoverAttachmentService {
+
+    /** 只规范三种图片格式的末尾后缀，保留文件名主体的大小写。 */
+    private static final Pattern IMAGE_SUFFIX = Pattern.compile("\\.(jpe?g|png|webp)$", Pattern.CASE_INSENSITIVE);
 
     private final AttachmentService attachmentService;
 
@@ -62,15 +66,19 @@ public class CoverAttachmentService {
      */
     public Mono<Attachment> upload(String username, String policyName, String groupName,
         String displayName, FilePart file) {
-        // 存储文件名和创建前的显示名称都采用用户输入，保持附件命名语义一致。
-        var filePart = new SimpleFilePart(displayName, file.content(),
+        // 存储文件名与附件显示名共用小写后缀，JPEG 与 JPG 统一为 jpg。
+        var normalizedName = IMAGE_SUFFIX.matcher(displayName).replaceFirst(match -> {
+            var suffix = match.group().toLowerCase(Locale.ROOT);
+            return suffix.equals(".jpeg") ? ".jpg" : suffix;
+        });
+        var filePart = new SimpleFilePart(normalizedName, file.content(),
             parseMediaType(file.headers().getFirst(HttpHeaders.CONTENT_TYPE)));
         return attachmentService.upload(username, policyName, trimToNull(groupName), filePart,
             attachment -> {
                 if (attachment.getSpec() == null) {
                     attachment.setSpec(new Attachment.AttachmentSpec());
                 }
-                attachment.getSpec().setDisplayName(displayName);
+                attachment.getSpec().setDisplayName(normalizedName);
             });
     }
 

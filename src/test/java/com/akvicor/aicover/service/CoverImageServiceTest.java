@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import com.akvicor.aicover.image.png.PngCompressor;
+import com.akvicor.aicover.image.GeneratedImageCompressor;
 import java.util.ArrayList;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -64,7 +65,7 @@ class CoverImageServiceTest {
         previousLevel = logger.getLevel();
         logger.setLevel(Level.DEBUG);
         coverImageService = new CoverImageService(extensionGetter, null,
-            new PngCompressor());
+            new GeneratedImageCompressor(new PngCompressor()));
     }
 
     @AfterEach

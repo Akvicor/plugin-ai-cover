@@ -204,17 +204,34 @@ describe('上传后设置当前编辑器封面', () => {
     expect(wrapper!.findAll('section')).toHaveLength(0)
   })
 
-  it('保留用户自定义的完整附件名及后缀', async () => {
+  it.each([
+    ['jpeg', 'jpg', 'image/jpeg'],
+    ['jpg', 'jpg', 'image/jpeg'],
+    ['JPEG', 'jpg', 'image/jpeg'],
+    ['JPG', 'jpg', 'image/jpeg'],
+    ['Jpg', 'jpg', 'image/jpeg'],
+    ['JpEg', 'jpg', 'image/jpeg'],
+    ['PNG', 'png', 'image/png'],
+    ['PnG', 'png', 'image/png'],
+    ['WEBP', 'webp', 'image/webp'],
+    ['WebP', 'webp', 'image/webp'],
+  ])('自定义 %s 后缀在上传时统一为 %s', async (suffix, expectedSuffix, mediaType) => {
+    vi.mocked(coverApi.getGenerateTask).mockResolvedValue({
+      taskId: 'task-id',
+      status: 'SUCCEEDED',
+      base64: 'aW1n',
+      mediaType,
+    })
     const formState = mountEditor()
     await openUpload()
     const inputs = wrapper!.findAll('input')
-    await inputs[inputs.length - 1]!.setValue('自定义封面.jpeg')
+    await inputs[inputs.length - 1]!.setValue(`自定义封面.${suffix}`)
 
     await clickButton('确认上传')
 
     const request = vi.mocked(coverApi.upload).mock.calls[0]![0]
-    expect(request.displayName).toBe('自定义封面.jpeg')
-    expect((request.file as File).name).toBe('自定义封面.jpeg')
+    expect(request.displayName).toBe(`自定义封面.${expectedSuffix}`)
+    expect((request.file as File).name).toBe(`自定义封面.${expectedSuffix}`)
     expect(request.taskId).toBe('task-id')
     expect(formState.cover).toBe('/uploads/cover.png')
   })

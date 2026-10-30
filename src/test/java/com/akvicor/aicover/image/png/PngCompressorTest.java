@@ -18,7 +18,6 @@ import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 /** 验证真实 PNG 编解码、透明边缘、调色板及独立格式开关。 */
 class PngCompressorTest {
@@ -29,17 +28,6 @@ class PngCompressorTest {
         var original = new GeneratedImage("original-payload", "image/png");
         var onStart = mock(Runnable.class);
         assertThat(compressor.compress(original, PngCompressionMode.NONE, onStart).block()).isSameAs(original);
-        verifyNoInteractions(onStart);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"image/jpeg", "image/webp", "image/gif", "image/svg+xml"})
-    void pngSettingsShouldNotChangeOtherFormats(String mediaType) {
-        var original = new GeneratedImage("original-payload", mediaType);
-        var onStart = mock(Runnable.class);
-        for (var mode : PngCompressionMode.values()) {
-            assertThat(compressor.compress(original, mode, onStart).block()).isSameAs(original);
-        }
         verifyNoInteractions(onStart);
     }
 
