@@ -150,4 +150,21 @@ describe('共享封面任务状态', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(vi.mocked(coverApi.listTasks).mock.calls.length).toBe(calls)
   })
+
+  it('有排队任务时持续查询，进入执行后恢复查询时限', async () => {
+    vi.mocked(coverApi.listTasks).mockResolvedValue({ tasks: [{ ...running, stage: 'QUEUED' }] })
+    observe()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(31 * 60_000)
+    const queuedCalls = vi.mocked(coverApi.listTasks).mock.calls.length
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(coverApi.listTasks).toHaveBeenCalledTimes(queuedCalls + 1)
+    vi.mocked(coverApi.listTasks).mockResolvedValue({
+      tasks: [{ ...running, stage: 'GENERATING' }],
+    })
+    await vi.advanceTimersByTimeAsync(32 * 60_000)
+    const completedWindow = vi.mocked(coverApi.listTasks).mock.calls.length
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(coverApi.listTasks).toHaveBeenCalledTimes(completedWindow)
+  })
 })

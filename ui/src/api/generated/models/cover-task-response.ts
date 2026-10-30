@@ -65,7 +65,7 @@ export interface CoverTaskResponse {
    */
   title?: string
   /**
-   * 处理阶段：QUEUED、DESCRIBING、GENERATING、UPLOADING、APPLYING、COMPLETED
+   * 处理阶段：QUEUED、DESCRIBING、GENERATING、COMPRESSING、UPLOADING、APPLYING、COMPLETED
    * @type {string}
    * @memberof CoverTaskResponse
    */

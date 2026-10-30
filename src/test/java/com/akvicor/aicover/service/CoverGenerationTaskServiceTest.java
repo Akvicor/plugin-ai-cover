@@ -57,9 +57,9 @@ class CoverGenerationTaskServiceTest {
 
     @Test
     void shouldKeepEditorImageUntilUploadedAndReleaseLockWhenImageIsReady() {
-        when(coverImageService.generate(any(), any(), any(), any())).thenReturn(Mono.just(image));
+        when(coverImageService.generate(any(), any(), any(), any(), any())).thenReturn(Mono.just(image));
 
-        var task = awaitTerminalState(taskService.submitEditor("post", "标题", "提示词", "正文"));
+        var task = awaitTerminalState(submitEditor("post", "标题", "提示词", "正文"));
 
         assertThat(task.getStatus()).isEqualTo(Status.SUCCEEDED);
         assertThat(task.getSource()).isEqualTo(Source.EDITOR);
@@ -74,10 +74,10 @@ class CoverGenerationTaskServiceTest {
     @Test
     void shouldRejectEverySourceWhileArticleIsLockedAndAcceptAfterFailure() {
         var pending = Sinks.<GeneratedImage>one();
-        when(coverImageService.generate(any(), any(), any(), any())).thenReturn(pending.asMono());
-        var running = taskService.submitEditor("post", "标题", "提示词", "正文");
+        when(coverImageService.generate(any(), any(), any(), any(), any())).thenReturn(pending.asMono());
+        var running = submitEditor("post", "标题", "提示词", "正文");
 
-        assertThatThrownBy(() -> taskService.submitEditor("post", "其他", "风格", "正文"))
+        assertThatThrownBy(() -> submitEditor("post", "其他", "风格", "正文"))
             .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
                 assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
                 assertThat(error.getReason()).isEqualTo("该文章正在生成封面");
@@ -91,10 +91,10 @@ class CoverGenerationTaskServiceTest {
         verify(backgroundCoverService, never()).loadContext(any());
         assertThat(taskService.list()).containsExactly(running);
 
-        verify(coverImageService, timeout(2000)).generate(any(), any(), any(), any());
+        verify(coverImageService, timeout(2000)).generate(any(), any(), any(), any(), any());
         pending.tryEmitError(new IllegalStateException("模型不可用"));
         assertThat(awaitTerminalState(running).getStatus()).isEqualTo(Status.FAILED);
-        var next = taskService.submitEditor("post", "标题", "提示词", "正文");
+        var next = submitEditor("post", "标题", "提示词", "正文");
         assertThat(next.getId()).isNotEqualTo(running.getId());
         assertThat(taskService.list()).containsExactly(next);
     }
@@ -104,14 +104,14 @@ class CoverGenerationTaskServiceTest {
         var request = listRequest(Mode.REPLACE);
         when(backgroundCoverService.loadContext(request)).thenReturn(Mono.just(
             new PostContextService.PostContext("标题", "正文")));
-        when(coverImageService.generate(any(), any(), any(), any())).thenReturn(Mono.just(image));
+        when(coverImageService.generate(any(), any(), any(), any(), any())).thenReturn(Mono.just(image));
         var applied = Sinks.<BackgroundCoverService.Result>one();
         when(backgroundCoverService.apply(any(), any(), any(), any())).thenReturn(applied.asMono());
 
         var task = taskService.submitBackground(request);
         verify(backgroundCoverService, timeout(2000)).apply(any(), any(), any(), any());
         assertThat(task.isRunning()).isTrue();
-        assertThatThrownBy(() -> taskService.submitEditor("post", "标题", "风格", "正文"))
+        assertThatThrownBy(() -> submitEditor("post", "标题", "风格", "正文"))
             .isInstanceOf(ResponseStatusException.class);
 
         var attachment = new Attachment();
@@ -141,7 +141,7 @@ class CoverGenerationTaskServiceTest {
         var request = listRequest(Mode.FILL);
         when(backgroundCoverService.loadContext(request)).thenReturn(Mono.just(
             new PostContextService.PostContext("标题", "正文")));
-        when(coverImageService.generate(any(), any(), any(), any())).thenReturn(Mono.just(image));
+        when(coverImageService.generate(any(), any(), any(), any(), any())).thenReturn(Mono.just(image));
         when(backgroundCoverService.apply(any(), any(), any(), any())).thenReturn(Mono.just(
             new BackgroundCoverService.Result(null, false, "文章已有封面，已跳过")));
 
@@ -154,15 +154,15 @@ class CoverGenerationTaskServiceTest {
     @Test
     void shouldShowReadableReasonsForFailures() {
         var bufferLimit = new DataBufferLimitException("Exceeded limit on max bytes to buffer : 1048576");
-        when(coverImageService.generate(any(), any(), any(), any()))
+        when(coverImageService.generate(any(), any(), any(), any(), any()))
             .thenReturn(Mono.error(Exceptions.retryExhausted("Retries exhausted: 1/1", bufferLimit)))
             .thenReturn(Mono.empty());
 
-        var buffer = awaitTerminalState(taskService.submitEditor("post", "标题", "提示词", "正文"));
+        var buffer = awaitTerminalState(submitEditor("post", "标题", "提示词", "正文"));
         assertThat(buffer.getStatus()).isEqualTo(Status.FAILED);
         assertThat(buffer.getMessage()).contains("缓冲上限");
 
-        var empty = awaitTerminalState(taskService.submitEditor("post", "标题", "提示词", "正文"));
+        var empty = awaitTerminalState(submitEditor("post", "标题", "提示词", "正文"));
         assertThat(empty.getMessage()).contains("未返回生成结果");
     }
 
@@ -190,9 +190,9 @@ class CoverGenerationTaskServiceTest {
     void shouldLogFailureWithoutProviderEchoOrStackTrace(CapturedOutput output) {
         var error = new IllegalStateException("供应商回显：未发布草稿与私密提示词");
         error.addSuppressed(new IllegalArgumentException("请求体包含保密正文"));
-        when(coverImageService.generate(any(), any(), any(), any())).thenReturn(Mono.error(error));
+        when(coverImageService.generate(any(), any(), any(), any(), any())).thenReturn(Mono.error(error));
 
-        var task = awaitTerminalState(taskService.submitEditor("post", "标题", "提示词", "正文"));
+        var task = awaitTerminalState(submitEditor("post", "标题", "提示词", "正文"));
 
         Awaitility.await().atMost(Duration.ofSeconds(3)).untilAsserted(() ->
             assertThat(output.getAll()).contains(task.getId(), "errorType=IllegalStateException"));
@@ -204,13 +204,13 @@ class CoverGenerationTaskServiceTest {
     @Test
     void shouldExpireTerminalStateFromFinishTimeOnlyWhenRead() throws Exception {
         var pending = Sinks.<GeneratedImage>one();
-        when(coverImageService.generate(any(), any(), any(), any())).thenReturn(pending.asMono());
-        var task = taskService.submitEditor("post", "标题", "提示词", "正文");
+        when(coverImageService.generate(any(), any(), any(), any(), any())).thenReturn(pending.asMono());
+        var task = submitEditor("post", "标题", "提示词", "正文");
         // 运行中的任务即使创建很久也不会被清理。
         setField(task, "createdAt", Instant.now().minus(Duration.ofHours(1)));
         assertThat(taskService.list()).containsExactly(task);
 
-        verify(coverImageService, timeout(2000)).generate(any(), any(), any(), any());
+        verify(coverImageService, timeout(2000)).generate(any(), any(), any(), any(), any());
         pending.tryEmitValue(image);
         awaitTerminalState(task);
         setField(task, "finishedAt", Instant.now().minus(Duration.ofMinutes(14)));
@@ -224,10 +224,10 @@ class CoverGenerationTaskServiceTest {
     @Test
     void shouldCancelRunningWorkAndReleaseLockOnPluginStop() {
         var cancelled = new CountDownLatch(1);
-        when(coverImageService.generate(any(), any(), any(), any()))
+        when(coverImageService.generate(any(), any(), any(), any(), any()))
             .thenReturn(Mono.<GeneratedImage>never().doOnCancel(cancelled::countDown));
-        var task = taskService.submitEditor("post", "标题", "风格", "正文");
-        verify(coverImageService, timeout(2000)).generate(any(), any(), any(), any());
+        var task = submitEditor("post", "标题", "风格", "正文");
+        verify(coverImageService, timeout(2000)).generate(any(), any(), any(), any(), any());
 
         taskService.stop();
 
@@ -239,11 +239,15 @@ class CoverGenerationTaskServiceTest {
 
     @Test
     void shouldReleaseOnlyEditorImages() {
-        when(coverImageService.generate(any(), any(), any(), any())).thenReturn(Mono.just(image));
-        var task = awaitTerminalState(taskService.submitEditor("post", "标题", "提示词", "正文"));
+        when(coverImageService.generate(any(), any(), any(), any(), any())).thenReturn(Mono.just(image));
+        var task = awaitTerminalState(submitEditor("post", "标题", "提示词", "正文"));
         taskService.releaseImage(null);
         taskService.releaseImage("unknown");
         assertThat(task.snapshot(false).imageAvailable()).isTrue();
+    }
+
+    private CoverGenerationTask submitEditor(String post, String title, String prompt, String content) {
+        return taskService.submitEditor(post, title, prompt, content, new CoverSettings());
     }
 
     private BackgroundCoverService.Request listRequest(Mode mode) {

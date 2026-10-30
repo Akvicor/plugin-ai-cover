@@ -120,7 +120,8 @@ class CoverConsoleEndpointTest {
     @Test
     void shouldSubmitEditorTaskWithTitleOverride() {
         article("后台标题", "<p>后台正文</p>");
-        when(taskService.submitEditor("post-name", "覆盖标题", "风格", "后台正文"))
+        when(settingService.getSettings()).thenReturn(Mono.just(new CoverSettings()));
+        when(taskService.submitEditor(eq("post-name"), eq("覆盖标题"), eq("风格"), eq("后台正文"), any()))
             .thenReturn(new CoverGenerationTask("task-id", "post-name", Source.EDITOR, null));
 
         generate(Map.of("postName", "post-name", "title", "覆盖标题", "prompt", "风格"))
@@ -133,7 +134,8 @@ class CoverConsoleEndpointTest {
     @Test
     void shouldReturnConflictWhenArticleIsLocked() {
         article("后台标题", "<p>后台正文</p>");
-        when(taskService.submitEditor(any(), any(), any(), any()))
+        when(settingService.getSettings()).thenReturn(Mono.just(new CoverSettings()));
+        when(taskService.submitEditor(any(), any(), any(), any(), any()))
             .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "该文章正在生成封面"));
         generate(Map.of("postName", "post-name", "prompt", "风格"))
             .expectStatus().isEqualTo(HttpStatus.CONFLICT);

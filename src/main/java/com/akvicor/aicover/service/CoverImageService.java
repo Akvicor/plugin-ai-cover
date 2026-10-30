@@ -7,6 +7,12 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.function.Consumer;
+import reactor.util.retry.Retry;
+import run.halo.aifoundation.exception.AiGenerationCancelledException;
+import run.halo.aifoundation.exception.InvalidMediaContentException;
+import run.halo.aifoundation.exception.UnsupportedModelCapabilityException;
+import run.halo.aifoundation.exception.ProviderApiException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import com.akvicor.aicover.image.png.PngCompressor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +22,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-import com.akvicor.aicover.setting.CoverSettingService;
 import com.akvicor.aicover.setting.CoverSettings;
 import com.akvicor.aicover.service.CoverGenerationTask.Stage;
 import run.halo.aifoundation.AiModelService;
@@ -51,7 +56,7 @@ public class CoverImageService {
     /** 单次模型调用的超时上限，避免请求无限等待。 */
     private static final Duration GENERATION_TIMEOUT = Duration.ofMinutes(5);
 
-    /** 可重试的供应商调用失败次数，与 AI Foundation 控制台测试保持一致。 */
+    /** 每个阶段最多重试一次；SDK 单次调用关闭内部重试，保证总共最多两次尝试。 */
     private static final int MAX_RETRIES = 1;
 
     /** 第一步语言模型使用的系统提示词。 */
@@ -73,8 +78,6 @@ public class CoverImageService {
 
     private final ExtensionGetter extensionGetter;
 
-    private final CoverSettingService coverSettingService;
-
     private final WebClient coverImageWebClient;
 
     private final PngCompressor pngCompressor;
@@ -82,24 +85,24 @@ public class CoverImageService {
     /**
      * 生成一张封面图：先用语言模型理解文章，再用图片模型出图。
      *
+     * @param settings 任务登记时读取的设置快照，两个阶段及重试共用
      * @param title 文章标题
      * @param prompt 用户在弹窗中确认的提示词，为空时使用插件设置中的默认提示词
      * @param content 文章正文纯文本
      * @param progress 真实处理阶段的观察者
      * @return 生成的图片数据（base64），模型返回 URL 时由服务端下载并转换
      */
-    public Mono<GeneratedImage> generate(String title, String prompt, String content,
-        Consumer<Stage> progress) {
-        return coverSettingService.getSettings()
-            .flatMap(settings -> {
-                var effectivePrompt = StringUtils.hasText(prompt) ? prompt : settings.getPrompt();
-                progress.accept(Stage.DESCRIBING);
-                return describe(settings, title, content)
-                    .flatMap(description -> {
-                        progress.accept(Stage.GENERATING);
-                        return doGenerate(settings, effectivePrompt, description);
-                    });
-            });
+    public Mono<GeneratedImage> generate(CoverSettings settings, String title, String prompt,
+        String content, Consumer<Stage> progress) {
+        return Mono.defer(() -> {
+            var effectivePrompt = StringUtils.hasText(prompt) ? prompt : settings.getPrompt();
+            progress.accept(Stage.DESCRIBING);
+            return describe(settings, title, content)
+                .flatMap(description -> {
+                    progress.accept(Stage.GENERATING);
+                    return doGenerate(settings, effectivePrompt, description, progress);
+                });
+        });
     }
 
     /**
@@ -109,31 +112,32 @@ public class CoverImageService {
         var article = CoverPromptComposer.composeArticle(title, content);
         log.debug("正在理解文章: modelName={}", settings.getDescriptionModelName());
         return resolveLanguageModel(settings.getDescriptionModelName())
-            .flatMap(model -> model.generateText(GenerateTextRequest.builder()
+            .flatMap(model -> Mono.defer(() -> model.generateText(GenerateTextRequest.builder()
                 .system(DESCRIPTION_SYSTEM_PROMPT)
                 .prompt(DESCRIPTION_USER_PROMPT.formatted(article))
                 .temperature(0.7)
                 .maxOutputTokens(600)
-                .maxRetries(MAX_RETRIES)
+                .maxRetries(0)
                 .timeouts(GenerationTimeouts.builder()
                     .totalTimeout(GENERATION_TIMEOUT)
                     .build())
                 .build()))
-            .map(result -> result.getText() == null ? "" : result.getText().strip())
-            .filter(StringUtils::hasText)
-            .switchIfEmpty(Mono.error(new IllegalStateException(
-                "语言模型没有返回画面描述，请检查所选模型是否可用")));
+                .map(result -> result.getText() == null ? "" : result.getText().strip())
+                .filter(StringUtils::hasText)
+                .switchIfEmpty(Mono.error(new IllegalStateException(
+                    "语言模型没有返回画面描述，请检查所选模型是否可用")))
+                .retryWhen(stageRetry()));
     }
 
     /**
      * 第二步：用图片模型根据画面描述与提示词生成封面图。
      */
     private Mono<GeneratedImage> doGenerate(CoverSettings settings, String prompt,
-        String description) {
+        String description, Consumer<Stage> progress) {
         var composedPrompt = CoverPromptComposer.composeImagePrompt(prompt, description);
         log.debug("正在生成封面图: modelName={}", settings.getImageModelName());
         return resolveImageModel(settings.getImageModelName())
-            .flatMap(model -> model.generateImage(GenerateImageRequest.builder()
+            .flatMap(model -> Mono.defer(() -> model.generateImage(GenerateImageRequest.builder()
                 .prompt(composedPrompt)
                 .n(1)
                 .aspectRatio(StringUtils.hasText(settings.getAspectRatio())
@@ -141,13 +145,38 @@ public class CoverImageService {
                 // 优先请求图片地址以减小模型响应体，图片下载由本插件管理超时和缓冲。
                 // 部分模型始终返回 base64，后续转换按实际返回方式处理。
                 .responseFormat(ImageResponseFormat.URL)
-                .maxRetries(MAX_RETRIES)
+                .maxRetries(0)
                 .timeouts(GenerationTimeouts.builder()
                     .totalTimeout(GENERATION_TIMEOUT)
                     .build())
                 .build()))
+                .filter(result -> result.getImages() != null && !result.getImages().isEmpty())
+                .switchIfEmpty(Mono.error(new IllegalStateException("图片生成模型没有返回任何图片")))
+                .retryWhen(stageRetry()))
             .flatMap(this::toGeneratedImage)
-            .flatMap(image -> pngCompressor.compress(image, settings.getPngCompressionMode()));
+            .flatMap(image -> pngCompressor.compress(image, settings.getPngCompressionMode(),
+                () -> progress.accept(Stage.COMPRESSING)));
+    }
+
+    /** 在模型调用边界重试临时失败和空结果，最终传递原始错误供任务状态说明。 */
+    private static Retry stageRetry() {
+        return Retry.max(MAX_RETRIES)
+            .filter(error -> {
+                if (error instanceof IllegalArgumentException
+                    || error instanceof AiGenerationCancelledException
+                    || error instanceof InvalidMediaContentException
+                    || error instanceof UnsupportedModelCapabilityException) {
+                    return false;
+                }
+                int status = 0;
+                if (error instanceof ProviderApiException provider) {
+                    status = provider.getStatusCode();
+                } else if (error instanceof WebClientResponseException response) {
+                    status = response.getStatusCode().value();
+                }
+                return status == 0 || status == 408 || status == 429 || status >= 500;
+            })
+            .onRetryExhaustedThrow((spec, signal) -> signal.failure());
     }
 
     private Mono<LanguageModel> resolveLanguageModel(String modelName) {
@@ -174,9 +203,6 @@ public class CoverImageService {
 
     private Mono<GeneratedImage> toGeneratedImage(GenerateImageResult result) {
         var images = result.getImages();
-        if (images == null || images.isEmpty()) {
-            return Mono.error(new IllegalStateException("图片生成模型没有返回任何图片"));
-        }
         // 供应商警告可能回显请求内容，日志只记录数量。
         if (result.getWarnings() != null && !result.getWarnings().isEmpty()) {
             log.debug("封面图生成模型返回警告: count={}", result.getWarnings().size());

@@ -31,7 +31,6 @@ import org.springframework.web.reactive.function.client.ExchangeFunction;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import com.akvicor.aicover.setting.CoverSettingService;
 import com.akvicor.aicover.setting.CoverSettings;
 import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.chat.GenerateTextRequest;
@@ -51,9 +50,6 @@ class CoverImageResponseTest {
     ExtensionGetter extensionGetter;
 
     @Mock
-    CoverSettingService settingService;
-
-    @Mock
     AiModelService modelService;
 
     @Mock
@@ -71,12 +67,11 @@ class CoverImageResponseTest {
 
     @BeforeEach
     void setUp() {
-        service = new CoverImageService(extensionGetter, settingService,
+        service = new CoverImageService(extensionGetter,
             WebClient.builder().exchangeFunction(exchangeFunction).build(), new PngCompressor());
         settings = new CoverSettings();
         settings.setDescriptionModelName("language");
         settings.setImageModelName("image");
-        when(settingService.getSettings()).thenReturn(Mono.just(settings));
         when(extensionGetter.getEnabledExtension(AiModelService.class))
             .thenReturn(Mono.just(modelService));
         when(modelService.languageModel("language")).thenReturn(Mono.just(languageModel));
@@ -170,7 +165,13 @@ class CoverImageResponseTest {
         var output = new ByteArrayOutputStream();
         ImageIO.write(source, "PNG", output);
         var payload = Base64.getEncoder().encodeToString(output.toByteArray());
-        var image = generate(GeneratedFile.url("data:image/png;base64," + payload, null));
+        when(imageModel.generateImage(any(GenerateImageRequest.class))).thenReturn(Mono.just(
+            GenerateImageResult.builder().images(List.of(
+                GeneratedFile.url("data:image/png;base64," + payload, null))).build()));
+        var stages = new java.util.ArrayList<CoverGenerationTask.Stage>();
+        var image = service.generate(settings, "标题", "风格", "正文", stages::add).block();
+        assertThat(stages).containsExactly(CoverGenerationTask.Stage.DESCRIBING,
+            CoverGenerationTask.Stage.GENERATING, CoverGenerationTask.Stage.COMPRESSING);
         var actual = ImageIO.read(new ByteArrayInputStream(Base64.getDecoder().decode(image.base64())));
         assertThat(actual.getRGB(0, 0)).isEqualTo(0xffffffff);
         assertThat(actual.getRGB(1, 0)).isEqualTo(0xffff7f7f);
@@ -181,7 +182,7 @@ class CoverImageResponseTest {
     private GeneratedImage generate(GeneratedFile file) {
         when(imageModel.generateImage(any(GenerateImageRequest.class))).thenReturn(Mono.just(
             GenerateImageResult.builder().images(List.of(file)).build()));
-        return service.generate("标题", "风格", "正文", ignored -> { })
+        return service.generate(settings, "标题", "风格", "正文", ignored -> { })
             .block(Duration.ofSeconds(5));
     }
 }

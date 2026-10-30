@@ -35,6 +35,8 @@ public final class CoverGenerationTask {
         DESCRIBING,
         /** 图片模型正在生成图片。 */
         GENERATING,
+        /** 正在对生成的 PNG 进行颜色量化和压缩。 */
+        COMPRESSING,
         /** 正在将图片保存到附件库。 */
         UPLOADING,
         /** 正在设置文章封面。 */

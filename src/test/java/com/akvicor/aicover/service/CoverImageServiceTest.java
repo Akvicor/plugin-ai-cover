@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import reactor.core.publisher.Mono;
-import com.akvicor.aicover.setting.CoverSettingService;
 import com.akvicor.aicover.setting.CoverSettings;
 import run.halo.aifoundation.AiModelService;
 import run.halo.aifoundation.chat.GenerateTextRequest;
@@ -45,9 +44,6 @@ class CoverImageServiceTest {
     ExtensionGetter extensionGetter;
 
     @Mock
-    CoverSettingService coverSettingService;
-
-    @Mock
     AiModelService aiModelService;
 
     @Mock
@@ -67,7 +63,7 @@ class CoverImageServiceTest {
         // 同时验证开启 DEBUG 后内容也不会流入日志。
         previousLevel = logger.getLevel();
         logger.setLevel(Level.DEBUG);
-        coverImageService = new CoverImageService(extensionGetter, coverSettingService, null,
+        coverImageService = new CoverImageService(extensionGetter, null,
             new PngCompressor());
     }
 
@@ -84,7 +80,6 @@ class CoverImageServiceTest {
         settings.setImageModelName("image-model");
         settings.setAspectRatio("16:9");
 
-        when(coverSettingService.getSettings()).thenReturn(Mono.just(settings));
         when(extensionGetter.getEnabledExtension(AiModelService.class))
             .thenReturn(Mono.just(aiModelService));
         when(aiModelService.languageModel("lang-model")).thenReturn(Mono.just(languageModel));
@@ -102,7 +97,7 @@ class CoverImageServiceTest {
                 .build()));
 
         var stages = new ArrayList<CoverGenerationTask.Stage>();
-        var image = coverImageService.generate("Caddy 安装", "二次元插画风格", "apt install caddy",
+        var image = coverImageService.generate(settings, "Caddy 安装", "二次元插画风格", "apt install caddy",
                 stages::add)
             .block();
         assertThat(stages).containsExactly(CoverGenerationTask.Stage.DESCRIBING,
@@ -139,14 +134,13 @@ class CoverImageServiceTest {
         settings.setDescriptionModelName("lang-model");
         settings.setImageModelName("image-model");
 
-        when(coverSettingService.getSettings()).thenReturn(Mono.just(settings));
         when(extensionGetter.getEnabledExtension(AiModelService.class))
             .thenReturn(Mono.just(aiModelService));
         when(aiModelService.languageModel("lang-model")).thenReturn(Mono.just(languageModel));
         when(languageModel.generateText(any(GenerateTextRequest.class)))
             .thenReturn(Mono.just(GenerateTextResult.builder().text("   ").build()));
 
-        assertThat(coverImageService.generate("标题", "风格", "正文", ignored -> { })
+        assertThat(coverImageService.generate(settings, "标题", "风格", "正文", ignored -> { })
             .onErrorResume(error -> Mono.empty())
             .block()).isNull();
 
@@ -160,9 +154,7 @@ class CoverImageServiceTest {
         var settings = new CoverSettings();
         settings.setPrompt("风格");
 
-        when(coverSettingService.getSettings()).thenReturn(Mono.just(settings));
-
-        var image = coverImageService.generate("标题", "风格", "正文", ignored -> { })
+        var image = coverImageService.generate(settings, "标题", "风格", "正文", ignored -> { })
             .onErrorResume(e -> Mono.empty())
             .block();
         assertThat(image).isNull();
@@ -175,9 +167,7 @@ class CoverImageServiceTest {
         settings.setImageModelName("image-model");
         // descriptionModelName 为空
 
-        when(coverSettingService.getSettings()).thenReturn(Mono.just(settings));
-
-        var message = coverImageService.generate("标题", "风格", "正文", ignored -> { })
+        var message = coverImageService.generate(settings, "标题", "风格", "正文", ignored -> { })
             .map(image -> "不应生成成功")
             .onErrorResume(error -> Mono.just(error.getMessage()))
             .block();

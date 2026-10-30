@@ -54,6 +54,7 @@ class CoverOpenApiTest {
                 assertThat(document.path("paths").has(prefix + "covers/apply")).isFalse();
                 var task = document.at("/components/schemas/CoverTaskResponse/properties");
                 assertThat(task.has("stage")).isTrue();
+                assertThat(task.path("stage").path("description").asText()).contains("COMPRESSING");
                 assertThat(task.has("source")).isTrue();
                 assertThat(task.has("imageAvailable")).isTrue();
                 assertThat(task.has("finishedAt")).isTrue();

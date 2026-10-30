@@ -2,6 +2,9 @@ package com.akvicor.aicover.image.png;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verify;
 
 import com.akvicor.aicover.service.GeneratedImage;
 import com.akvicor.aicover.setting.PngCompressionMode;
@@ -24,16 +27,20 @@ class PngCompressorTest {
     @Test
     void disabledShouldPreserveTheOriginalObjectWithoutDecoding() {
         var original = new GeneratedImage("original-payload", "image/png");
-        assertThat(compressor.compress(original, PngCompressionMode.NONE).block()).isSameAs(original);
+        var onStart = mock(Runnable.class);
+        assertThat(compressor.compress(original, PngCompressionMode.NONE, onStart).block()).isSameAs(original);
+        verifyNoInteractions(onStart);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"image/jpeg", "image/webp", "image/gif", "image/svg+xml"})
     void pngSettingsShouldNotChangeOtherFormats(String mediaType) {
         var original = new GeneratedImage("original-payload", mediaType);
+        var onStart = mock(Runnable.class);
         for (var mode : PngCompressionMode.values()) {
-            assertThat(compressor.compress(original, mode).block()).isSameAs(original);
+            assertThat(compressor.compress(original, mode, onStart).block()).isSameAs(original);
         }
+        verifyNoInteractions(onStart);
     }
 
     @Test
@@ -100,7 +107,7 @@ class PngCompressorTest {
     void shouldRejectBrokenPngInsteadOfReturningAnUncompressedSuccess() {
         var invalid = new GeneratedImage(Base64.getEncoder().encodeToString(new byte[] {1, 2, 3}),
             "image/png");
-        assertThatThrownBy(() -> compressor.compress(invalid, PngCompressionMode.WHITE_BACKGROUND)
+        assertThatThrownBy(() -> compressor.compress(invalid, PngCompressionMode.WHITE_BACKGROUND, () -> { })
             .block(Duration.ofSeconds(10)))
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("PNG 图片压缩失败");
@@ -111,7 +118,9 @@ class PngCompressorTest {
         ImageIO.write(source, "PNG", original);
         var generated = new GeneratedImage(Base64.getEncoder().encodeToString(original.toByteArray()),
             "image/png");
-        var result = compressor.compress(generated, mode).block(Duration.ofSeconds(30));
+        var onStart = mock(Runnable.class);
+        var result = compressor.compress(generated, mode, onStart).block(Duration.ofSeconds(30));
+        verify(onStart).run();
         assertThat(result.mediaType()).isEqualTo("image/png");
         byte[] bytes = Base64.getDecoder().decode(result.base64());
         // IHDR 的颜色类型和交错字段直接验证最终附件编码，而非中间 BufferedImage。

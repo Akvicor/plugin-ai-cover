@@ -139,11 +139,11 @@ public class CoverConsoleEndpoint implements CustomEndpoint {
             .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "请求体不能为空")))
             .flatMap(body -> resolveContext(body)
-                .map(context -> {
+                .flatMap(context -> coverSettingService.getSettings().map(settings -> {
                     var task = coverGenerationTaskService.submitEditor(body.postName(),
-                        context.title(), body.prompt(), context.content());
+                        context.title(), body.prompt(), context.content(), settings);
                     return CoverTaskResponse.from(task, false);
-                }))
+                })))
             .flatMap(response -> ServerResponse.accepted().bodyValue(response));
     }
 

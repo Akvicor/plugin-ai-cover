@@ -118,25 +118,31 @@ public class BackgroundCoverService {
                 }
                 progress.accept(Stage.UPLOADING);
                 var settings = request.settings();
-                return attachmentService.uploadGenerated(post.getSpec().getOwner(),
+                var upload = attachmentService.uploadGenerated(post.getSpec().getOwner(),
                         settings.getPolicyName(), settings.getGroupName(), title, image)
-                    .switchIfEmpty(Mono.error(new IllegalStateException("附件上传未返回结果")))
-                    .flatMap(attachment -> save(request, attachment, progress));
+                    .switchIfEmpty(Mono.error(new IllegalStateException("附件上传未返回结果")));
+                return save(request, upload, progress);
             })
             .defaultIfEmpty(new Result(null, false, PostCoverService.DELETED));
     }
 
-    private Mono<Result> save(Request request, Attachment attachment, Consumer<Stage> progress) {
+    private Mono<Result> save(Request request, Mono<Attachment> upload, Consumer<Stage> progress) {
+        // 附件获得后由 usingWhen 统一管理错误与取消清理；discard 会保留已被文章引用的附件。
+        return Mono.usingWhen(upload,
+            resource -> applyCover(request, resource, progress),
+            resource -> Mono.empty(),
+            (resource, error) -> postCoverService.discard(request.postName(), resource),
+            resource -> postCoverService.discard(request.postName(), resource));
+    }
+
+    private Mono<Result> applyCover(Request request, Attachment attachment, Consumer<Stage> progress) {
         var postName = request.postName();
         if (attachment.getStatus() == null
             || !StringUtils.hasText(attachment.getStatus().getPermalink())) {
-            return postCoverService.discard(postName, attachment)
-                .then(Mono.error(new IllegalStateException("附件没有访问地址，无法设置封面")));
+            return Mono.error(new IllegalStateException("附件没有访问地址，无法设置封面"));
         }
         progress.accept(Stage.APPLYING);
         return postCoverService.write(postName, attachment, request.mode(), request.requirePublished())
-            .onErrorResume(error -> postCoverService.discard(postName, attachment)
-                .then(Mono.error(error)))
             .flatMap(result -> result.applied()
                 ? Mono.just(new Result(attachment, true, null))
                 : postCoverService.discard(postName, attachment)

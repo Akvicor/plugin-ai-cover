@@ -35,7 +35,7 @@ public record CoverTaskResponse(
     @Schema(description = "失败、跳过或取消时的说明") String message,
     @Schema(description = "文章 metadata.name") String postName,
     @Schema(description = "生成使用的文章标题") String title,
-    @Schema(description = "处理阶段：QUEUED、DESCRIBING、GENERATING、UPLOADING、APPLYING、COMPLETED")
+    @Schema(description = "处理阶段：QUEUED、DESCRIBING、GENERATING、COMPRESSING、UPLOADING、APPLYING、COMPLETED")
     String stage,
     @Schema(description = "触发来源：EDITOR、LIST 或 PUBLISH") String source,
     @Schema(description = "后台任务写入方式：FILL 补充封面，REPLACE 重新生成") String mode,

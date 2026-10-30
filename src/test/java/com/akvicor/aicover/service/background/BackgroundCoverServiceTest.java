@@ -186,6 +186,21 @@ class BackgroundCoverServiceTest {
         verifyNoInteractions(attachmentService);
     }
 
+    @Test
+    void shouldDiscardUploadedAttachmentWhenCancelledWhileApplying() {
+        when(client.fetch(Post.class, "post")).thenReturn(Mono.just(post(null)));
+        var attachment = attachment();
+        when(attachmentService.uploadGenerated(any(), any(), any(), any(), any()))
+            .thenReturn(Mono.just(attachment));
+        when(postCoverService.write("post", attachment, Mode.REPLACE, false)).thenReturn(Mono.never());
+        when(postCoverService.discard("post", attachment)).thenReturn(Mono.empty());
+        var subscription = service.apply(request(Source.LIST, Mode.REPLACE), "标题", image,
+            ignored -> { }).subscribe();
+        verify(postCoverService).write("post", attachment, Mode.REPLACE, false);
+        subscription.dispose();
+        verify(postCoverService).discard("post", attachment);
+    }
+
     private void assertStatus(Mono<?> mono, HttpStatus status, String reason) {
         assertThatThrownBy(mono::block).isInstanceOfSatisfying(ResponseStatusException.class, error -> {
             assertThat(error.getStatusCode()).isEqualTo(status);

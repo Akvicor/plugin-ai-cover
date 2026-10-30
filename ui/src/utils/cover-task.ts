@@ -1,9 +1,10 @@
 import type { CoverTaskResponse } from '@/api'
 
 const STAGE_LABELS: Record<string, string> = {
-  QUEUED: '等待处理',
+  QUEUED: '排队等待',
   DESCRIBING: '正在理解文章',
   GENERATING: '正在生成图片',
+  COMPRESSING: '正在压缩图片',
   UPLOADING: '正在上传附件',
   APPLYING: '正在设置封面',
 }

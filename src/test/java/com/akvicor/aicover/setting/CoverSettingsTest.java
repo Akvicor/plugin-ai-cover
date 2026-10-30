@@ -27,4 +27,21 @@ class CoverSettingsTest {
         assertThatThrownBy(() -> mapper.readValue("{\"pngCompressionMode\":\"unknown\"}", CoverSettings.class))
             .isInstanceOf(com.fasterxml.jackson.databind.exc.InvalidFormatException.class);
     }
+
+    @Test
+    void shouldValidateConcurrencyWithBothHaloAndLegacyMappers() throws Exception {
+        var haloMapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        assertThat(mapper.readValue("{}", CoverSettings.class).getMaxConcurrentGenerations()).isEqualTo(8);
+        assertThat(haloMapper.readValue("{}", CoverSettings.class).getMaxConcurrentGenerations()).isEqualTo(8);
+        for (var value : new String[] {"1", "8", "1024", "\"8\""}) {
+            var json = "{\"maxConcurrentGenerations\":" + value + "}";
+            assertThat(mapper.readValue(json, CoverSettings.class).getMaxConcurrentGenerations()).isBetween(1, 1024);
+            assertThat(haloMapper.readValue(json, CoverSettings.class).getMaxConcurrentGenerations()).isBetween(1, 1024);
+        }
+        for (var value : new String[] {"0", "-1", "1025", "1.5"}) {
+            var json = "{\"maxConcurrentGenerations\":" + value + "}";
+            assertThatThrownBy(() -> mapper.readValue(json, CoverSettings.class)).hasMessageContaining("1–1024");
+            assertThatThrownBy(() -> haloMapper.readValue(json, CoverSettings.class)).hasMessageContaining("1–1024");
+        }
+    }
 }

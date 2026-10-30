@@ -36,8 +36,10 @@ function schedule() {
     deadline = 0
     return
   }
-  if (deadline === 0) deadline = Date.now() + POLL_MAX_DURATION
-  if (Date.now() >= deadline) {
+  // 排队时长取决于前面的任务；队列耗尽后再计算运行阶段的查询上限。
+  if (Object.values(tasks.value).some((task) => task.stage === 'QUEUED')) deadline = 0
+  else if (deadline === 0) deadline = Date.now() + POLL_MAX_DURATION
+  if (deadline !== 0 && Date.now() >= deadline) {
     deadline = 0
     return
   }

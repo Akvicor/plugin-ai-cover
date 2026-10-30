@@ -234,7 +234,9 @@ function handleUploaded(attachment: Attachment) {
         </div>
         <div v-if="task" class="flex flex-col gap-1.5">
           <CoverTaskStatus :task="task" />
-          <p v-if="running && !submitting" class="text-sm text-gray-600">该文章正在生成封面</p>
+          <p v-if="running && !submitting" class="text-sm text-gray-600">
+            {{ task.stage === 'QUEUED' ? '该文章正在排队等待' : '该文章正在生成封面' }}
+          </p>
           <p
             v-if="task.status === 'SKIPPED' || task.status === 'CANCELLED'"
             class="text-sm text-gray-600"

@@ -8,6 +8,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayDeque;
+import java.math.BigDecimal;
+import org.springframework.context.event.EventListener;
+import run.halo.app.plugin.PluginConfigUpdatedEvent;
+import com.akvicor.aicover.setting.CoverSettings;
+import com.akvicor.aicover.setting.CoverSettingService;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -53,6 +59,15 @@ public class CoverGenerationTaskService {
 
     private final Disposable.Composite subscriptions = Disposables.composite();
 
+    /** 排队任务复用现有文章锁和任务状态，只有调度后才订阅工作流。 */
+    private final ArrayDeque<QueuedWork> queue = new ArrayDeque<>();
+    private int activeTasks;
+    private int concurrencyLimit = CoverSettings.DEFAULT_MAX_CONCURRENT_GENERATIONS;
+    private boolean concurrencyInitialized;
+
+    private record QueuedWork(CoverGenerationTask task, Mono<Void> work) {
+    }
+
     /** 编辑器、列表和发布事件共用同一份任务登记与文章级锁。 */
     public CoverGenerationTaskService(CoverImageService coverImageService,
         BackgroundCoverService backgroundCoverService) {
@@ -62,9 +77,9 @@ public class CoverGenerationTaskService {
 
     /** 编辑器：后台只生成图片，文章锁定到图片生成结束，预览和上传由浏览器完成。 */
     public CoverGenerationTask submitEditor(String postName, String title, String prompt,
-        String content) {
+        String content, CoverSettings settings) {
         var task = register(postName, Source.EDITOR, null).orElseThrow(this::locked);
-        start(task, Mono.just(new PostContextService.PostContext(title, content)), prompt, null);
+        start(task, Mono.just(new PostContextService.PostContext(title, content)), prompt, settings, null);
         return task;
     }
 
@@ -129,14 +144,14 @@ public class CoverGenerationTaskService {
 
     private void startBackground(CoverGenerationTask task, BackgroundCoverService.Request request) {
         start(task, Mono.defer(() -> backgroundCoverService.loadContext(request)),
-            request.settings().getPrompt(), request);
+            request.settings().getPrompt(), request.settings(), request);
     }
 
     private void start(CoverGenerationTask task, Mono<PostContextService.PostContext> context,
-        String prompt, BackgroundCoverService.Request request) {
+        String prompt, CoverSettings settings, BackgroundCoverService.Request request) {
         var work = context.flatMap(article -> {
                 task.setTitle(article.title());
-                return coverImageService.generate(article.title(), prompt, article.content(),
+                return coverImageService.generate(settings, article.title(), prompt, article.content(),
                         task::progress)
                     .switchIfEmpty(Mono.error(new IllegalStateException("图片模型未返回生成结果")));
             })
@@ -144,7 +159,50 @@ public class CoverGenerationTaskService {
                 ? finishEditor(task, image)
                 : finishBackground(task, request, image))
             .then();
-        track(task.getPostName(), work, task);
+        enqueue(task, work, settings.getMaxConcurrentGenerations());
+    }
+
+    private synchronized void enqueue(CoverGenerationTask task, Mono<Void> work, int initialLimit) {
+        if (subscriptions.isDisposed()) {
+            task.finish(Status.CANCELLED, "插件已停止，任务已取消", null);
+            return;
+        }
+        if (!concurrencyInitialized) {
+            concurrencyLimit = initialLimit;
+            concurrencyInitialized = true;
+        }
+        queue.addLast(new QueuedWork(task, work));
+        drainQueue();
+    }
+
+    /** 设置保存后立即采用新的并发值，降低上限时等待已有任务自然完成。 */
+    @EventListener
+    public synchronized void onConfigUpdated(PluginConfigUpdatedEvent event) {
+        var group = event.getNewSettingValues().get(CoverSettingService.GROUP);
+        var value = group == null ? null : group.get("maxConcurrentGenerations");
+        try {
+            concurrencyLimit = value == null || value.isNull()
+                ? CoverSettings.DEFAULT_MAX_CONCURRENT_GENERATIONS
+                : CoverSettings.requireConcurrency(new BigDecimal(value.asString()));
+            concurrencyInitialized = true;
+            drainQueue();
+        } catch (IllegalArgumentException error) {
+            log.warn("全局并发配置无效，保留当前上限: errorType={}", error.getClass().getSimpleName());
+        }
+    }
+
+    // 调用方持有任务管理器锁，名额预留和队列出队在同一临界区完成。
+    private void drainQueue() {
+        while (!subscriptions.isDisposed() && activeTasks < concurrencyLimit && !queue.isEmpty()) {
+            var next = queue.removeFirst();
+            activeTasks++;
+            track(next.task().getPostName(), next.work(), next.task());
+        }
+    }
+
+    private synchronized void taskTerminated() {
+        activeTasks--;
+        drainQueue();
     }
 
     private Mono<Void> finishEditor(CoverGenerationTask task, GeneratedImage image) {
@@ -167,6 +225,7 @@ public class CoverGenerationTaskService {
         if (!subscriptions.add(subscription)) {
             if (task != null) {
                 task.finish(Status.CANCELLED, "插件已停止，任务已取消", null);
+                taskTerminated();
             }
             return;
         }
@@ -177,6 +236,9 @@ public class CoverGenerationTaskService {
                     task.finish(Status.CANCELLED, "插件已停止，任务已取消", null);
                 }
                 subscriptions.remove(subscription);
+                if (task != null) {
+                    taskTerminated();
+                }
             })
             .subscribe(ignored -> { }, error -> {
                 if (error instanceof CoverSkippedException skipped) {
@@ -205,8 +267,9 @@ public class CoverGenerationTaskService {
 
     /** 插件上下文关闭时取消订阅，释放运行中的文章锁。 */
     @PreDestroy
-    public void stop() {
+    public synchronized void stop() {
         subscriptions.dispose();
+        queue.clear();
         tasks.values().forEach(task -> task.finish(Status.CANCELLED, "插件已停止，任务已取消", null));
     }
 

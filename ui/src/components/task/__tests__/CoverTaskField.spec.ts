@@ -114,6 +114,19 @@ describe('文章列表封面菜单与状态徽标', () => {
     expect(running.find('[role="status"]').exists()).toBe(false)
   })
 
+  it('刷新后展示压缩阶段并继续跟踪上传', async () => {
+    coverApi.listTasks
+      .mockResolvedValueOnce({ tasks: [task({ stage: 'GENERATING' })] })
+      .mockResolvedValueOnce({ tasks: [task({ stage: 'COMPRESSING' })] })
+      .mockResolvedValue({ tasks: [task({ stage: 'UPLOADING' })] })
+    const field = await open()
+    expect(field.get('[role="status"]').attributes('aria-label')).toBe('正在生成图片')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(field.get('[role="status"]').attributes('aria-label')).toBe('正在压缩图片')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(field.get('[role="status"]').attributes('aria-label')).toBe('正在上传附件')
+  })
+
   it('成功后显示结果并只刷新一次列表，行组件重建后不重复刷新', async () => {
     coverApi.listTasks.mockResolvedValue({
       tasks: [task({ status: 'SUCCEEDED', attachment, finishedAt: '2026-10-19T08:00:00Z' })],

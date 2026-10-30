@@ -16,12 +16,15 @@ import reactor.core.scheduler.Schedulers;
 /** 将生成的静态 PNG 转成自适应索引色图片，预览和附件共用同一结果。 */
 @Component
 public class PngCompressor {
-    /** 关闭时保留原图；启用后在工作线程完成图片解码、量化及内存编码。 */
-    public Mono<GeneratedImage> compress(GeneratedImage image, PngCompressionMode mode) {
+    /** 开始处理时通知调用方；关闭压缩或非 PNG 透传时保持原图并跳过通知。 */
+    public Mono<GeneratedImage> compress(GeneratedImage image, PngCompressionMode mode, Runnable onStart) {
         if (mode == PngCompressionMode.NONE || !"image/png".equalsIgnoreCase(image.mediaType())) {
             return Mono.just(image);
         }
-        return Mono.fromCallable(() -> compressPng(image, mode))
+        return Mono.fromCallable(() -> {
+                onStart.run();
+                return compressPng(image, mode);
+            })
             .subscribeOn(Schedulers.boundedElastic())
             .onErrorMap(IOException.class,
                 error -> new IllegalStateException("PNG 图片压缩失败", error));

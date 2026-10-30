@@ -10,6 +10,26 @@ import lombok.Data;
 @Data
 public class CoverSettings {
 
+    /** 新安装和缺少并发设置时采用的任务并发上限。 */
+    public static final int DEFAULT_MAX_CONCURRENT_GENERATIONS = 8;
+
+    private int maxConcurrentGenerations = DEFAULT_MAX_CONCURRENT_GENERATIONS;
+
+    /** 校验配置边界，拒绝小数及超出 1–1024 的并发值。 */
+    public static int requireConcurrency(Number value) {
+        int limit = value.intValue();
+        if (limit < 1 || limit > 1024 || value.doubleValue() != limit) {
+            throw new IllegalArgumentException("全局并发上限必须是 1–1024 之间的整数");
+        }
+        return limit;
+    }
+
+    /** 配置缺失或显式为 null 时保持默认并发值。 */
+    @JsonSetter(nulls = Nulls.SKIP)
+    public void setMaxConcurrentGenerations(Number value) {
+        this.maxConcurrentGenerations = requireConcurrency(value);
+    }
+
     /** 开启后，在文章发布成功且缺少封面时自动生成并保存封面。 */
     private boolean autoGenerateOnPublish;
 
