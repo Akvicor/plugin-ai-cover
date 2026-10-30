@@ -34,7 +34,7 @@ class PngCompressorTest {
     @Test
     void removeAlphaModeShouldKeepOriginalRgbIncludingHiddenColors() throws Exception {
         int[] colors = {0x00ff0000, 0x40ff0000, 0x80ff0000, 0xc0ff0000, 0xffff0000, 0xff00ff00};
-        var source = new BufferedImage(colors.length, 3, BufferedImage.TYPE_INT_ARGB);
+        var source = new BufferedImage(128, 64, BufferedImage.TYPE_INT_ARGB);
         for (int y = 0; y < source.getHeight(); y++) {
             source.setRGB(0, y, colors.length, 1, colors, 0, colors.length);
         }
@@ -48,10 +48,12 @@ class PngCompressorTest {
 
     @Test
     void whiteModeShouldCompositePartialTransparencyBeforeQuantizing() throws Exception {
-        var source = new BufferedImage(3, 1, BufferedImage.TYPE_INT_ARGB);
-        source.setRGB(0, 0, 0x00000000);
-        source.setRGB(1, 0, 0x80ff0000);
-        source.setRGB(2, 0, 0xff0000ff);
+        var source = new BufferedImage(128, 64, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < source.getHeight(); y++) {
+            source.setRGB(0, y, 0x00000000);
+            source.setRGB(1, y, 0x80ff0000);
+            source.setRGB(2, y, 0xff0000ff);
+        }
         var actual = compress(source, PngCompressionMode.WHITE_BACKGROUND);
         assertThat(actual.getColorModel().hasAlpha()).isFalse();
         assertThat(actual.getRGB(0, 0)).isEqualTo(0xffffffff);
@@ -89,6 +91,20 @@ class PngCompressorTest {
         }
         // 平滑色块应仍保持接近原图的合成颜色，防止固定调色板或 Alpha 处理退化。
         assertThat(absoluteError / (source.getWidth() * source.getHeight() * 3)).isLessThan(6);
+    }
+
+    @Test
+    void shouldKeepOriginalWhenQuantizationWouldIncreaseSize() throws Exception {
+        var source = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+        source.setRGB(0, 0, 0xff123456);
+        var original = new ByteArrayOutputStream();
+        ImageIO.write(source, "PNG", original);
+        var input = new GeneratedImage(Base64.getEncoder().encodeToString(original.toByteArray()),
+            "image/png");
+        var onStart = mock(Runnable.class);
+        assertThat(compressor.compress(input, PngCompressionMode.WHITE_BACKGROUND, onStart)
+            .block(Duration.ofSeconds(10))).isSameAs(input);
+        verify(onStart).run();
     }
 
     @Test

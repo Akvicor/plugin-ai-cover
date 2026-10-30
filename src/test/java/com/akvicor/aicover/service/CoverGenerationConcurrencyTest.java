@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.akvicor.aicover.service.background.BackgroundCoverService;
+import com.akvicor.aicover.setting.CoverSettingService;
 import com.akvicor.aicover.setting.CoverSettings;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -25,14 +26,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
-import run.halo.app.plugin.PluginConfigUpdatedEvent;
-import tools.jackson.databind.json.JsonMapper;
 
 /** 验证名额、FIFO、文章锁、动态设置与停用取消共同组成的调度约束。 */
 class CoverGenerationConcurrencyTest {
     private final CoverImageService images = mock(CoverImageService.class);
+    private final CoverSettingService coverSettings = mock(CoverSettingService.class);
     private final CoverGenerationTaskService service = new CoverGenerationTaskService(images,
-        mock(BackgroundCoverService.class));
+        mock(BackgroundCoverService.class), coverSettings);
     private final Map<String, Sinks.One<GeneratedImage>> pending = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<String> started = new CopyOnWriteArrayList<>();
 
@@ -102,6 +102,21 @@ class CoverGenerationConcurrencyTest {
     }
 
     @Test
+    void configReadFailureShouldKeepCurrentLimit() {
+        submit("a", 1);
+        submit("b", 1);
+        awaitStarted(1);
+        when(coverSettings.getSettings())
+            .thenReturn(Mono.error(new IllegalStateException("settings unavailable")));
+
+        service.onConfigUpdated();
+
+        assertThat(started).containsExactly("a");
+        finish("a");
+        awaitStarted(2);
+    }
+
+    @Test
     void stoppingShouldCancelQueuedAndActiveTasksWithoutStartingMore() {
         var active = submit("a", 1);
         var queued = submit("b", 1);
@@ -147,9 +162,10 @@ class CoverGenerationConcurrencyTest {
     }
 
     private void changeLimit(int limit) {
-        var values = JsonMapper.builder().build().createObjectNode().put("maxConcurrentGenerations", limit);
-        service.onConfigUpdated(PluginConfigUpdatedEvent.builder().source(this)
-            .newSettingValues(Map.of("default", values)).build());
+        var settings = new CoverSettings();
+        settings.setMaxConcurrentGenerations(limit);
+        when(coverSettings.getSettings()).thenReturn(Mono.just(settings));
+        service.onConfigUpdated();
     }
 
     private void finish(String name) {

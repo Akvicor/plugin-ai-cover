@@ -164,8 +164,10 @@ class CoverImageResponseTest {
     @Test
     void shouldCompressDataUrlBeforeReturningTheGeneratedImage() throws Exception {
         settings.setPngCompressionMode(PngCompressionMode.WHITE_BACKGROUND);
-        var source = new BufferedImage(2, 1, BufferedImage.TYPE_INT_ARGB);
-        source.setRGB(1, 0, 0x80ff0000);
+        var source = new BufferedImage(128, 64, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < source.getHeight(); y++) {
+            source.setRGB(1, y, 0x80ff0000);
+        }
         var output = new ByteArrayOutputStream();
         ImageIO.write(source, "PNG", output);
         var payload = Base64.getEncoder().encodeToString(output.toByteArray());

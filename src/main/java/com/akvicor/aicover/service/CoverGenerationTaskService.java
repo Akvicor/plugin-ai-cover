@@ -9,7 +9,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayDeque;
-import java.math.BigDecimal;
 import org.springframework.context.event.EventListener;
 import run.halo.app.plugin.PluginConfigUpdatedEvent;
 import com.akvicor.aicover.setting.CoverSettings;
@@ -53,6 +52,8 @@ public class CoverGenerationTaskService {
 
     private final BackgroundCoverService backgroundCoverService;
 
+    private final CoverSettingService coverSettingService;
+
     private final Map<String, CoverGenerationTask> tasks = new ConcurrentHashMap<>();
 
     private final Map<String, CoverGenerationTask> latestByPost = new ConcurrentHashMap<>();
@@ -70,9 +71,10 @@ public class CoverGenerationTaskService {
 
     /** 编辑器、列表和发布事件共用同一份任务登记与文章级锁。 */
     public CoverGenerationTaskService(CoverImageService coverImageService,
-        BackgroundCoverService backgroundCoverService) {
+        BackgroundCoverService backgroundCoverService, CoverSettingService coverSettingService) {
         this.coverImageService = coverImageService;
         this.backgroundCoverService = backgroundCoverService;
+        this.coverSettingService = coverSettingService;
     }
 
     /** 编辑器：后台只生成图片，文章锁定到图片生成结束，预览和上传由浏览器完成。 */
@@ -175,20 +177,33 @@ public class CoverGenerationTaskService {
         drainQueue();
     }
 
-    /** 设置保存后立即采用新的并发值，降低上限时等待已有任务自然完成。 */
-    @EventListener
-    public synchronized void onConfigUpdated(PluginConfigUpdatedEvent event) {
-        var group = event.getNewSettingValues().get(CoverSettingService.GROUP);
-        var value = group == null ? null : group.get("maxConcurrentGenerations");
-        try {
-            concurrencyLimit = value == null || value.isNull()
-                ? CoverSettings.DEFAULT_MAX_CONCURRENT_GENERATIONS
-                : CoverSettings.requireConcurrency(new BigDecimal(value.asString()));
-            concurrencyInitialized = true;
-            drainQueue();
-        } catch (IllegalArgumentException error) {
-            log.warn("全局并发配置无效，保留当前上限: errorType={}", error.getClass().getSimpleName());
+    /**
+     * 设置保存后通过公开设置接口重新读取并发值，避免直接依赖事件中的 Jackson 节点类型。
+     *
+     * <p>Halo 2.26 同时使用 Jackson 2 和 Jackson 3；开发模式下两者的类加载器可能不同，
+     * 直接读取事件节点会在保存设置时触发类型转换异常。这里只把事件当作刷新信号。
+     */
+    @EventListener(PluginConfigUpdatedEvent.class)
+    public void onConfigUpdated() {
+        if (subscriptions.isDisposed()) {
+            return;
         }
+        var refresh = coverSettingService.getSettings()
+            .doOnNext(settings -> applyConcurrency(settings.getMaxConcurrentGenerations()))
+            .onErrorResume(error -> {
+                log.warn("读取全局并发配置失败，保留当前上限: errorType={}",
+                    error.getClass().getSimpleName());
+                return Mono.empty();
+            })
+            .subscribe();
+        subscriptions.add(refresh);
+    }
+
+    /** 应用新的并发上限；降低上限时等待已有任务自然完成。 */
+    private synchronized void applyConcurrency(int limit) {
+        concurrencyLimit = limit;
+        concurrencyInitialized = true;
+        drainQueue();
     }
 
     // 调用方持有任务管理器锁，名额预留和队列出队在同一临界区完成。

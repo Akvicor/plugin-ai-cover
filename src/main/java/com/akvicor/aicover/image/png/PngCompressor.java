@@ -64,7 +64,10 @@ public class PngCompressor {
             }
         }
         var indexed = ErrorDiffusion.apply(pixels, width, height, PaletteQuantizer.quantize(pixels));
-        return new GeneratedImage(Base64.getEncoder().encodeToString(IndexedPngEncoder.encode(indexed)),
-            "image/png");
+        byte[] encoded = IndexedPngEncoder.encode(indexed);
+        if (encoded.length >= bytes.length) {
+            return image;
+        }
+        return new GeneratedImage(Base64.getEncoder().encodeToString(encoded), "image/png");
     }
 }
