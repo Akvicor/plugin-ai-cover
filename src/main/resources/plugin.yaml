@@ -18,7 +18,7 @@ spec:
   repo: https://github.com/akvicor/plugin-ai-cover
   issues: https://github.com/akvicor/plugin-ai-cover/issues
   displayName: "AI 封面生成"
-  description: "使用 AI Foundation 配置的图片生成模型，根据文章标题、提示词与正文生成封面图，并上传到附件库"
+  description: "使用 AI Foundation 配置的语言模型理解文章标题与正文，再由图片模型结合提示词生成封面图，支持预览、压缩并上传到附件库"
   pluginDependencies:
     ai-foundation: ">=1.0.0 & <2.0.0"
   license:
