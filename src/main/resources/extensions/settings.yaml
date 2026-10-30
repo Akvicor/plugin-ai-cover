@@ -74,6 +74,7 @@ spec:
         - $formkit: select
           name: jpegCompressionMode
           id: aiCoverJpegCompressionMode
+          key: jpegCompressionMode
           label: JPEG 压缩方式
           value: NONE
           validation: required
@@ -86,6 +87,7 @@ spec:
         - $formkit: number
           if: "$get(aiCoverJpegCompressionMode).value === 'QUALITY'"
           name: jpegQuality
+          key: jpegQuality
           label: JPEG 图片质量
           value: 80
           min: 1
@@ -96,6 +98,7 @@ spec:
         - $formkit: select
           name: webpCompressionMode
           id: aiCoverWebpCompressionMode
+          key: webpCompressionMode
           label: WebP 压缩方式
           value: NONE
           validation: required
@@ -108,6 +111,7 @@ spec:
         - $formkit: number
           if: "$get(aiCoverWebpCompressionMode).value === 'QUALITY'"
           name: webpQuality
+          key: webpQuality
           label: WebP 图片质量
           value: 80
           min: 1
